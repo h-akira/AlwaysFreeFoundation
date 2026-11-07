@@ -1,0 +1,19 @@
+# Private notes and scratch space (never publish)
+pre-research/
+tmp/
+
+# Secrets and environment-specific values
+.env
+.env.*
+*.pem
+*.key
+
+# Terraform local state and artifacts
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+
+# OS / editor
+.DS_Store
