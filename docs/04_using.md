@@ -54,7 +54,7 @@ networks:
     external: true
 ```
 
-- `AFP_IMAGE_PREFIX`・`AFP_TAG` の形と、ビルドの手順（OCI DevOps の `build_spec.yaml`）の書き方は、PoC で決める。
+- `AFP_IMAGE_PREFIX`・`AFP_TAG` の形と、ビルドの手順（OCI DevOps の `build_spec.yaml`）の書き方は、基盤を作りながら確かめて決める（未決）。
 - 動く見本は、基盤のリポジトリの `examples/hello` に置く。
 
 ## 3. 基盤が渡す環境変数
@@ -74,6 +74,6 @@ networks:
 - **マイグレーションはアプリが行う**（起動時など）。基盤はデプロイの直前に DB のダンプを取るだけで、マイグレーションには関わらない。
 - **DB への接続の数を小さくする**（接続プールで数本）。DB の接続の上限は、全プロジェクトで共有している。
 - **VM の中にファイルを残さない**。VM はいつ作り直されてもよいようにしてある（[02](02_architecture.md) §4）。アプリが受け取ったファイルを残すなら、プロジェクトが自分で Object Storage などに置く。
-- **DB の文字コードは `utf8mb4`**。照合順序は、日本語の扱い（濁点・半濁点を区別するか）を PoC で確かめて決める。
+- **DB の文字コードは `utf8mb4`**。照合順序は、日本語の扱い（濁点・半濁点を区別するか）を確かめて決める（未決）。
 
 MySQL でアプリを書くときに、ほかの DB との違いで気を付けることは [references/mysql-notes.md](references/mysql-notes.md) にまとめてある。
