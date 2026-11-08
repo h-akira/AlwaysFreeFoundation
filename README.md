@@ -18,9 +18,11 @@ OCI の Always Free を最大限に使い、個人開発の複数のプロジェ
 | [01 目的と方針](docs/01_purpose.md) | なぜこの基盤があるのか、何を優先するのか、向く使い方と向かない使い方 |
 | [02 構成と決定](docs/02_architecture.md) | 前提にした無料枠、全体の構成、主な決定と採らなかった案 |
 | [03 役割と責任](docs/03_responsibilities.md) | 基盤の管理者とプロジェクトの管理者の分担と境目 |
+| [04 基盤を使う](docs/04_using.md) | プロジェクトの管理者向け。基盤に載せるための約束 |
 
 参考資料（それだけで読める独立した資料）:
 
 | 資料 | 内容 |
 |---|---|
 | [OCI の無料枠](docs/references/oci-free-tier.md) | Always Free の枠・制約・アイドル回収（確かめた日付と出典つき） |
+| [MySQL でアプリを書くときの注意](docs/references/mysql-notes.md) | ほかの DB（PostgreSQL など）との違い、日本語の照合順序、HeatWave の版の上がり方 |
