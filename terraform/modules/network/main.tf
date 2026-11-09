@@ -21,11 +21,24 @@ resource "oci_core_vcn" "afp" {
   dns_label      = "afp"
 }
 
-# Only MySQL traffic from inside the DB subnet (where the Bastion endpoint lives).
+# Only MySQL traffic inside the DB subnet. The Bastion's private endpoint lives
+# in this subnet and shares this list, so it needs the egress rules to reach the DB.
 resource "oci_core_security_list" "db" {
   compartment_id = var.compartment_id
   vcn_id         = oci_core_vcn.afp.id
   display_name   = "afp-db"
+
+  dynamic "egress_security_rules" {
+    for_each = [3306, 33060]
+    content {
+      protocol    = "6" # TCP
+      destination = var.db_subnet_cidr
+      tcp_options {
+        min = egress_security_rules.value
+        max = egress_security_rules.value
+      }
+    }
+  }
 
   dynamic "ingress_security_rules" {
     for_each = [3306, 33060]
