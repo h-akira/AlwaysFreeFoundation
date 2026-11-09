@@ -23,3 +23,6 @@ log_bin_trust_function_creators = ON
 lock_wait_timeout = 86400
 # Server-wide connection limit shared by all projects.
 max_connections = 200
+# Not a HeatWave server setting: the platform creates each project database
+# with this collation, so local databases get the same default.
+collation_server = utf8mb4_ja_0900_as_cs_ks

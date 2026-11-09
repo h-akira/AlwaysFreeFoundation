@@ -56,8 +56,14 @@ OCI（Oracle Cloud Infrastructure）の無料枠を調べた結果。
 公式文書に見つからなかったこと:
 
 - 使わないと止まる・消されるといった条件（Autonomous Database の「7 日で停止」に当たるもの）
-- `max_connections` などの設定の既定値
 - 削除防止を有効にできるか
+
+実際に作って確かめたこと（2026-11-09、版 `26.10.0-u1-cloud`）:
+
+- 作るときにバックアップの方針（`backupPolicy`）を指定すると、`400 InvalidParameter`（Always Free の DB には指定できない）になる。
+- 作成にかかった時間は約 17 分。
+- `max_connections` は 200。`time_zone` は UTC。`partial_revokes` は有効。
+- パスワードの検査（`validate_password`）が MEDIUM で効いている。8 文字以上で、英大文字・英小文字・数字・記号を各 1 つ以上含む必要がある。
 
 ## 4. Autonomous Database の Always Free
 
