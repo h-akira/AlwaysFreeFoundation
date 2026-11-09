@@ -26,3 +26,4 @@ OCI の Always Free を最大限に使い、個人開発の複数のプロジェ
 |---|---|
 | [OCI の無料枠](docs/references/oci-free-tier.md) | Always Free の枠・制約・アイドル回収（確かめた日付と出典つき） |
 | [MySQL でアプリを書くときの注意](docs/references/mysql-notes.md) | ほかの DB（PostgreSQL など）との違い、日本語の照合順序、HeatWave の版の上がり方 |
+| [OCI Bastion](docs/references/oci-bastion.md) | プライベート・サブネットの資源に手元から入る方法（ポート転送） |
