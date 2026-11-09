@@ -27,9 +27,10 @@ def test_strings_stay_and_others_become_json() -> None:
     }
 
 
-def test_rm_provided_keys_are_dropped() -> None:
-    tfvars = {"tenancy_ocid": "ocid1.tenancy.oc1..xxxx", "region": "us-ashburn-1", "x": "y"}
-    assert rm_values.to_rm_variables(tfvars) == {"x": "y"}
+def test_tenancy_and_region_are_passed() -> None:
+    # Stacks created from the CLI do not get these from Resource Manager.
+    tfvars = {"tenancy_ocid": "ocid1.tenancy.oc1..xxxx", "region": "us-ashburn-1"}
+    assert rm_values.to_rm_variables(tfvars) == tfvars
 
 
 def test_null_is_rejected() -> None:
@@ -59,4 +60,4 @@ def test_cli_get_and_variables(tmp_path: Path) -> None:
     assert missing.returncode == 1
 
     variables = subprocess.run([sys.executable, SCRIPT, "variables", path], capture_output=True, text=True, check=True)
-    assert json.loads(variables.stdout) == {"home_cidrs": '["192.0.2.10/32"]'}
+    assert json.loads(variables.stdout) == {"region": "us-ashburn-1", "home_cidrs": '["192.0.2.10/32"]'}

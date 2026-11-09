@@ -14,9 +14,6 @@ import json
 import sys
 from typing import Any
 
-# Resource Manager sets these itself; passing them as stack variables is not needed.
-RM_PROVIDED_KEYS: frozenset[str] = frozenset({"tenancy_ocid", "region"})
-
 
 def to_rm_variables(tfvars: dict[str, Any]) -> dict[str, str]:
     """Convert tfvars values to Resource Manager variables (strings only).
@@ -26,8 +23,6 @@ def to_rm_variables(tfvars: dict[str, Any]) -> dict[str, str]:
     """
     result: dict[str, str] = {}
     for key, value in tfvars.items():
-        if key in RM_PROVIDED_KEYS:
-            continue
         if value is None:
             raise ValueError(f"variable {key!r} is null; remove it to use the default")
         result[key] = value if isinstance(value, str) else json.dumps(value, separators=(",", ":"))
