@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Send plan/apply jobs for terraform/ to OCI Resource Manager.
 #
-# Usage: stack.sh plan|apply|outputs
+# Usage: stack.sh plan|apply|destroy|outputs
 #   plan     Upload terraform/ at HEAD and the variables, then run a plan job.
 #   apply    Apply exactly the latest plan job, if it was made from HEAD.
+#   destroy  Destroy every resource of the stack (the stack itself is kept).
+#            Asks to type the stack name, or needs AFP_CONFIRM_DESTROY=<name>.
 #   outputs  Print the stack's outputs as KEY=VALUE lines.
 #
 # Environment:
@@ -123,6 +125,23 @@ cmd_apply() {
   echo "Applied $sha. Commit the platform/ pointer in the config repository."
 }
 
+cmd_destroy() {
+  local stack_id answer
+  stack_id="$(find_stack)"
+  [[ -n "$stack_id" && "$stack_id" != "null" ]] || die "stack not found"
+
+  if [[ "${AFP_CONFIRM_DESTROY:-}" != "$STACK_NAME" ]]; then
+    [[ -t 0 ]] || die "not a terminal; set AFP_CONFIRM_DESTROY=$STACK_NAME to confirm"
+    read -r -p "Destroy all resources of stack '$STACK_NAME'? Type the stack name: " answer
+    [[ "$answer" == "$STACK_NAME" ]] || die "aborted"
+  fi
+
+  echo "Destroying ..."
+  run_job create-destroy-job --stack-id "$stack_id" --display-name "destroy-$(head_sha)" \
+    --execution-plan-strategy AUTO_APPROVED
+  echo "Destroyed. The stack itself is kept; 'make plan' and 'make apply' recreate everything."
+}
+
 cmd_outputs() {
   local stack_id
   stack_id="$(find_stack)"
@@ -134,6 +153,7 @@ cmd_outputs() {
 case "${1:-}" in
   plan) cmd_plan ;;
   apply) cmd_apply ;;
+  destroy) cmd_destroy ;;
   outputs) cmd_outputs ;;
-  *) sed -n '2,13p' "$0" >&2; exit 2 ;;
+  *) sed -n '2,15p' "$0" >&2; exit 2 ;;
 esac

@@ -7,7 +7,7 @@ export AFP_CONFIG_DIR
 
 PYTHON ?= $(ROOT)/env/bin/python
 
-.PHONY: help plan apply outputs db-tunnel lint test env
+.PHONY: help plan apply destroy outputs db-tunnel lint test env
 
 help: ## Show targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | sed 's/:.*## /\t/'
@@ -17,6 +17,9 @@ plan: ## Upload terraform/ at HEAD and run a Resource Manager plan job
 
 apply: ## Apply the latest plan job (must be a plan of HEAD)
 	@$(ROOT)/scripts/stack.sh apply
+
+destroy: ## Destroy all resources of the stack (asks for confirmation)
+	@$(ROOT)/scripts/stack.sh destroy
 
 outputs: ## Print the stack outputs
 	@$(ROOT)/scripts/stack.sh outputs
