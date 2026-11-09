@@ -36,7 +36,7 @@ MySQL 8.0 以降の既定の照合順序 `utf8mb4_0900_ai_ci` は、アクセン
 ## 3. MySQL HeatWave の版
 
 - MySQL HeatWave の Always Free の DB は、作るときに最新の版になり、**保守のたびに最新の版へ上がる**（[oci-free-tier.md](oci-free-tier.md) §3）。
-- 最新の版（Innovation の系列）は、版ごとに機能の削除や既定値の変更がありうる。版が上がったら、手元の MySQL を同じ版にしてテストを流し直す。
+- 最新の版（Innovation の系列。数か月ごとに新しい機能を入れて出る系列で、長く同じ版を保守する LTS の系列とは別）は、版ごとに機能の削除や既定値の変更がありうる。版が上がったら、手元の MySQL を同じ版にしてテストを流し直す。
 - いまの版は `SELECT VERSION();` で確かめられる。
 
 ## 4. 出典

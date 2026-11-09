@@ -1,4 +1,4 @@
-# AlwaysFreeFoundation
+# AlwaysFreePlatform
 
 OCI の Always Free を最大限に使い、個人開発の複数のプロジェクトを **少ない VM と1つの DB に相乗り** させる共通基盤。コマンド名は `afp`。
 
