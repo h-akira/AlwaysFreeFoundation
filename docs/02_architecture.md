@@ -63,7 +63,7 @@ flowchart TB
 | **OCI DevOps** | 各プロジェクトの `release` ブランチへの push を受けてそのプロジェクトをビルドし、VM に `afp deploy` を実行させる（§5.6） |
 | **OCI Monitoring・Notifications** | 基盤のヘルスチェック（§5.7）の結果を受け、失敗したり届かなくなったりしたらメールで知らせる |
 | **OCI Bastion** | 手元からプライベート・サブネットの DB に入るための、一時的な入口（§5.9） |
-| **Terraform**（OCI Resource Manager で実行） | VM の外のものをすべて作る。プロジェクトの一覧から、プロジェクトごとのシークレットとパイプラインも作る |
+| **Terraform**（OCI Resource Manager で実行。[references/oci-resource-manager.md](references/oci-resource-manager.md)） | VM の外のものをすべて作る。プロジェクトの一覧から、プロジェクトごとのシークレットとパイプラインも作る |
 
 - **VM の外は Terraform、VM の中は `afp`** が受け持つ。`afp` は Terraform が書いたプロジェクトの一覧に従う。
 - プロジェクトの DB とユーザは、Terraform でなく VM の `afp` が、Vault に置いた DB の管理者のパスワードで作る。Terraform を実行する Resource Manager からは、プライベート・サブネットの DB に届かないため。

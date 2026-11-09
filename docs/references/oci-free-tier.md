@@ -20,7 +20,7 @@ OCI（Oracle Cloud Infrastructure）の無料枠を調べた結果。
 | Compute: E2.1.Micro（x86） | **2 台** まで。各 1/8 OCPU・1 GB |
 | ブロック・ボリューム | ブートとブロックの **合計 200 GB**。バックアップ 5 個 |
 | Object Storage | Always Free だけのアカウントで 20 GB。有料のアカウントでは種類（Standard・Infrequent Access・Archive）ごとに 10 GB。API 5 万回/月 |
-| Vault | シークレット 150 個（各 40 版）。ソフトウェアで守る鍵は無制限 |
+| Vault | シークレット 150 個（各 40 版）。ソフトウェアで守る鍵は無制限（シークレットの暗号化にも使えた。2026-11-09 実測） |
 | MySQL HeatWave | **1 個**（§3） |
 | Autonomous Database | 2 個。各 1 OCPU・20 GB・同時 30 セッション（§4） |
 | Load Balancer | Flexible 1 個（10 Mbps）。Network Load Balancer 1 個 |
