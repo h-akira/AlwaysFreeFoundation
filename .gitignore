@@ -17,3 +17,12 @@ tmp/
 
 # OS / editor
 .DS_Store
+*.tfvars.json
+
+# Python
+env/
+__pycache__/
+.pytest_cache/
+
+# Build artifacts
+*.zip

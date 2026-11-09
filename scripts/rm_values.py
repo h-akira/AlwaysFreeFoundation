@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""Value conversion helpers for scripts/*.sh (Python standard library only).
+
+Subcommands:
+  variables TFVARS_JSON      Print Resource Manager stack variables as JSON.
+  get TFVARS_JSON KEY        Print one top-level value from the tfvars file.
+  outputs                    Read a Terraform state from stdin and print
+                             outputs as KEY=VALUE lines.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from typing import Any
+
+# Resource Manager sets these itself; passing them as stack variables is not needed.
+RM_PROVIDED_KEYS: frozenset[str] = frozenset({"tenancy_ocid", "region"})
+
+
+def to_rm_variables(tfvars: dict[str, Any]) -> dict[str, str]:
+    """Convert tfvars values to Resource Manager variables (strings only).
+
+    Strings stay as they are; everything else (lists, maps, numbers, booleans)
+    becomes JSON text, which Terraform parses for complex-typed variables.
+    """
+    result: dict[str, str] = {}
+    for key, value in tfvars.items():
+        if key in RM_PROVIDED_KEYS:
+            continue
+        if value is None:
+            raise ValueError(f"variable {key!r} is null; remove it to use the default")
+        result[key] = value if isinstance(value, str) else json.dumps(value, separators=(",", ":"))
+    return result
+
+
+def state_outputs(state: dict[str, Any]) -> dict[str, str]:
+    """Extract outputs from a Terraform state as strings."""
+    result: dict[str, str] = {}
+    for key, output in state.get("outputs", {}).items():
+        if output.get("sensitive"):
+            continue
+        value = output.get("value")
+        result[key] = value if isinstance(value, str) else json.dumps(value)
+    return result
+
+
+def _load_json(path: str) -> dict[str, Any]:
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError(f"{path}: top level must be an object")
+    return data
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) == 2 and argv[0] == "variables":
+        print(json.dumps(to_rm_variables(_load_json(argv[1]))))
+    elif len(argv) == 3 and argv[0] == "get":
+        value = _load_json(argv[1]).get(argv[2])
+        if value is None:
+            print(f"{argv[1]}: {argv[2]} is not set", file=sys.stderr)
+            return 1
+        print(value if isinstance(value, str) else json.dumps(value))
+    elif len(argv) == 1 and argv[0] == "outputs":
+        for key, value in state_outputs(json.load(sys.stdin)).items():
+            print(f"{key}={value}")
+    else:
+        print(__doc__, file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
