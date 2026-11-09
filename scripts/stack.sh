@@ -19,6 +19,8 @@ set -euo pipefail
 STACK_NAME="afp"
 TERRAFORM_VERSION="1.5.x"
 JOB_MAX_WAIT_SECONDS=3600
+POLL_SECONDS=15
+REFRESH_SECONDS=600
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PY=(python3 "$ROOT/scripts/rm_values.py")
@@ -58,14 +60,35 @@ finish_job() {
   [[ "$state" == "SUCCEEDED" ]] || die "job $job_id ended in $state"
 }
 
+# Session tokens expire after about an hour; keep them alive during long jobs.
+refresh_session() {
+  if [[ "${OCI_CLI_AUTH:-}" == "security_token" ]]; then
+    oci session refresh > /dev/null 2>&1 || echo "stack.sh: warning: session refresh failed" >&2
+  fi
+}
+
 run_job() {
-  # $1: create-plan-job | create-apply-job; remaining args are passed through.
+  # $1: create-plan-job | create-apply-job | create-destroy-job; the rest is passed through.
   local kind="$1"; shift
-  local job_id
-  job_id="$(oci_ resource-manager job "$kind" "$@" \
-    --wait-for-state SUCCEEDED --wait-for-state FAILED --wait-for-state CANCELED \
-    --max-wait-seconds "$JOB_MAX_WAIT_SECONDS" \
-    --query 'data.id' --raw-output)"
+  local job_id state waited=0 since_refresh=0
+  refresh_session
+  job_id="$(oci_ resource-manager job "$kind" "$@" --query 'data.id' --raw-output)"
+  echo "Job $job_id started; waiting ..."
+  while :; do
+    state="$(oci_ resource-manager job get --job-id "$job_id" \
+      --query 'data."lifecycle-state"' --raw-output)"
+    case "$state" in
+      SUCCEEDED|FAILED|CANCELED) break ;;
+    esac
+    (( waited < JOB_MAX_WAIT_SECONDS )) || die "job $job_id still $state after ${waited}s"
+    sleep "$POLL_SECONDS"
+    waited=$(( waited + POLL_SECONDS ))
+    since_refresh=$(( since_refresh + POLL_SECONDS ))
+    if (( since_refresh >= REFRESH_SECONDS )); then
+      refresh_session
+      since_refresh=0
+    fi
+  done
   finish_job "$job_id"
 }
 
