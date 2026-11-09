@@ -6,10 +6,6 @@ resource "oci_kms_vault" "afp" {
   compartment_id = var.compartment_id
   display_name   = "afp"
   vault_type     = "DEFAULT"
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 resource "oci_kms_key" "afp" {
@@ -21,10 +17,6 @@ resource "oci_kms_key" "afp" {
   key_shape {
     algorithm = "AES"
     length    = 32
-  }
-
-  lifecycle {
-    prevent_destroy = true
   }
 }
 

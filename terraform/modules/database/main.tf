@@ -46,12 +46,7 @@ resource "oci_mysql_mysql_db_system" "afp" {
     retention_in_days = 1
   }
 
-  deletion_policy {
-    is_delete_protected = true
-  }
-
   lifecycle {
-    prevent_destroy = true
     # The service upgrades the version during maintenance.
     ignore_changes = [mysql_version]
   }
