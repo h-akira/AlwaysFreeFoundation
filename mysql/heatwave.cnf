@@ -1,0 +1,25 @@
+# Settings that make the official mysql image (tag: see VERSION) behave like
+# the platform's MySQL HeatWave (Always Free) for applications.
+#
+# Mount it into the local container:
+#   volumes:
+#     - ./heatwave.cnf:/etc/mysql/conf.d/heatwave.cnf:ro
+#
+# Only server variables that differ from the image defaults and can change how
+# an application behaves are listed. HeatWave-only features (Lakehouse, health
+# monitor, validate_password, mandatory_roles) are not reproduced.
+# Compared against the HeatWave DB system on 2026-11-09 (26.10.0-u1-cloud).
+
+[mysqld]
+# GRANT/REVOKE: wildcards (% and _) in database names are taken literally.
+partial_revokes = ON
+# Session time zone defaults to UTC.
+default_time_zone = 'UTC'
+# LOAD DATA LOCAL INFILE is allowed.
+local_infile = ON
+# CREATE FUNCTION/TRIGGER works without SUPER even with binary logging.
+log_bin_trust_function_creators = ON
+# Metadata lock wait (e.g. ALTER TABLE behind a long transaction).
+lock_wait_timeout = 86400
+# Server-wide connection limit shared by all projects.
+max_connections = 200
