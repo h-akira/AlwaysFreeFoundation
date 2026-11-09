@@ -7,8 +7,9 @@
 #
 # Environment:
 #   AFP_CONFIG_DIR       Directory holding terraform.tfvars.json (required).
-#   AFP_SSH_PUBLIC_KEY   Public key for the session (default ~/.ssh/id_ed25519.pub).
-#                        The private key is the same path without ".pub".
+#   AFP_SSH_PUBLIC_KEY   Public key for the session. The private key is the same
+#                        path without ".pub". Default: a throwaway key pair made
+#                        for this session and deleted on exit.
 #   AFP_DB_LOCAL_PORT    Local port (default 13306, to avoid a local MySQL).
 #   AFP_SESSION_TTL      Session lifetime in seconds (default 10800, the maximum).
 set -euo pipefail
@@ -23,13 +24,29 @@ TFVARS="$AFP_CONFIG_DIR/terraform.tfvars.json"
 [[ -f "$TFVARS" ]] || die "$TFVARS not found"
 REGION="$("${PY[@]}" get "$TFVARS" region)"
 
-PUBLIC_KEY="${AFP_SSH_PUBLIC_KEY:-$HOME/.ssh/id_ed25519.pub}"
-PRIVATE_KEY="${PUBLIC_KEY%.pub}"
 LOCAL_PORT="${AFP_DB_LOCAL_PORT:-13306}"
 SESSION_TTL="${AFP_SESSION_TTL:-10800}"
-[[ -f "$PUBLIC_KEY" && -f "$PRIVATE_KEY" ]] || die "ssh key pair not found: $PRIVATE_KEY(.pub)"
-
 oci_() { oci --region "$REGION" "$@"; }
+
+session_id=""
+tmp="$(mktemp -d)"
+cleanup() {
+  if [[ -n "$session_id" ]]; then
+    oci_ bastion session delete --session-id "$session_id" --force > /dev/null 2>&1 || true
+  fi
+  rm -rf "$tmp"
+}
+trap cleanup EXIT
+
+if [[ -n "${AFP_SSH_PUBLIC_KEY:-}" ]]; then
+  PUBLIC_KEY="$AFP_SSH_PUBLIC_KEY"
+  PRIVATE_KEY="${PUBLIC_KEY%.pub}"
+  [[ -f "$PUBLIC_KEY" && -f "$PRIVATE_KEY" ]] || die "ssh key pair not found: $PRIVATE_KEY(.pub)"
+else
+  PRIVATE_KEY="$tmp/id_ed25519"
+  PUBLIC_KEY="$PRIVATE_KEY.pub"
+  ssh-keygen -q -t ed25519 -N "" -C "afp-db-tunnel" -f "$PRIVATE_KEY"
+fi
 
 # Stack outputs as KEY=VALUE lines (bash 3.2 compatible: no associative arrays).
 outputs="$("$ROOT/scripts/stack.sh" outputs)"
@@ -74,8 +91,8 @@ Connect from another terminal:
 Press Ctrl-C to close the tunnel.
 EOF
 
-trap 'oci_ bastion session delete --session-id "$session_id" --force > /dev/null 2>&1 || true' EXIT
 ssh -i "$PRIVATE_KEY" -N \
   -o ServerAliveInterval=60 -o StrictHostKeyChecking=accept-new \
+  -o UserKnownHostsFile="$tmp/known_hosts" \
   -L "127.0.0.1:${LOCAL_PORT}:${DB_IP}:${DB_PORT}" \
   "${session_id}@host.bastion.${REGION}.oci.oraclecloud.com"
