@@ -29,6 +29,7 @@ data "oci_identity_availability_domains" "all" {
 
 # Always Free MySQL HeatWave (one per tenancy). The version is left unset so
 # that it starts at the latest and follows the service's upgrades.
+# The backup policy cannot be set for Always Free (fixed: automatic, 1 day).
 resource "oci_mysql_mysql_db_system" "afp" {
   compartment_id          = var.compartment_id
   display_name            = "afp-db"
@@ -40,11 +41,6 @@ resource "oci_mysql_mysql_db_system" "afp" {
   data_storage_size_in_gb = 50
   is_highly_available     = false
   hostname_label          = "db"
-
-  backup_policy {
-    is_enabled        = true
-    retention_in_days = 1
-  }
 
   lifecycle {
     # The service upgrades the version during maintenance.
