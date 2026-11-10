@@ -1,6 +1,7 @@
 # Stack "afp": everything that is created and destroyed repeatedly.
 # The compartment, vault and key come from the base stack (terraform/base)
 # and are looked up by name, so no values are passed between the stacks.
+# The names ("afp") must match terraform/modules/iam and terraform/modules/vault.
 
 data "oci_identity_compartments" "afp" {
   compartment_id = var.tenancy_ocid

@@ -9,9 +9,17 @@ VM をステートレスにするには、シークレットを VM の外に置�
 ## 決定
 
 - プロジェクトのシークレットを OCI Vault に置く。VM はインスタンス・プリンシパルで読み、デプロイのたびに環境変数のファイルを作る。
-- コンテナから VM のメタデータへの通信を落とす。メタデータの古い口（v1）も止める。
+- 生成できる値（DB のパスワード・`generate` のシークレット）は、Terraform が生成して Vault に置く。
+- コンテナから VM のメタデータへの通信を、VM の初期設定で落とす。同じ IP の 53 番（VCN の DNS）だけは通す。メタデータの古い口（v1）も止める。
 
 ## 理由
 
 - 同じ働きの OCI のサービスがあり、VM に与えた権限だけで使える。
 - メタデータに届けば、VM の中の誰でもインスタンス・プリンシパルを使える。Docker の既定ではコンテナから届くので、そのままだと 1 つのアプリが破られただけで、全プロジェクトのシークレットと DB のダンプが読まれる。
+- OCI の VCN の DNS は、メタデータと同じ `169.254.169.254` にある（[DNS in Your Virtual Cloud Network](https://docs.cloud.oracle.com/iaas/Content/Network/Concepts/dns.htm)）。すべて落とすと、コンテナが名前を引けなくなる。
+- DB の管理者のパスワードは、DB を作るときに要る。プロジェクトのシークレットは、プロジェクトごとに 1 つの JSON にまとめる。Vault の自動の生成は 1 つのシークレットに 1 つの値しか作れないので、Terraform で作る（[release note](https://docs.oracle.com/en-us/iaas/releasenotes/changes/27c7e769-3598-4e1c-9a14-7a1b71c755c3)）。
+
+## 引き換え
+
+- 生成した値は Resource Manager の state にも残る。state を読める人は値を読める。
+- プロジェクトの compose が `network_mode: host`・`privileged`・`/var/run/docker.sock` のマウントなどを使えば、メタデータへの遮断を抜けられる。基盤は断らない（仕組みを増やさない）。自分（たち）のプロジェクトを載せる基盤なので許す。

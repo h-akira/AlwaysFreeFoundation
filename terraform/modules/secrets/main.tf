@@ -24,8 +24,8 @@ resource "random_password" "db_admin" {
   min_lower   = 1
   min_numeric = 1
   min_special = 1
-  # Avoid characters that need quoting in shells and URLs.
-  override_special = "-_.!#%+="
+  # Only symbols usable as-is in URLs; HeatWave requires at least one symbol.
+  override_special = "-_.~"
 }
 
 resource "oci_vault_secret" "db_admin_password" {

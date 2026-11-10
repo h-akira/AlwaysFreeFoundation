@@ -81,4 +81,8 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except ValueError as e:
+        print(f"rm_values.py: {e}", file=sys.stderr)
+        sys.exit(1)

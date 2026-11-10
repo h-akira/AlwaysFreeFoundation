@@ -86,4 +86,10 @@ def test_cli_variables_with_keys(tmp_path: Path) -> None:
     assert json.loads(only.stdout) == {"region": "us-ashburn-1"}
 
     missing = subprocess.run([sys.executable, SCRIPT, "variables", path, "region,tenancy_ocid"], capture_output=True, text=True)
-    assert missing.returncode != 0
+    assert missing.returncode == 1
+    assert "not set: tenancy_ocid" in missing.stderr
+    assert "Traceback" not in missing.stderr
+
+    # An empty key list selects nothing.
+    empty = subprocess.run([sys.executable, SCRIPT, "variables", path, ","], capture_output=True, text=True, check=True)
+    assert json.loads(empty.stdout) == {}

@@ -29,7 +29,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PY=(python3 "$ROOT/scripts/rm_values.py")
 
 die() { echo "stack.sh: $*" >&2; exit 1; }
-usage() { sed -n '2,20p' "$0" >&2; exit 2; }
+# Print the header comment (up to the first non-comment line).
+usage() { sed -n '2,/^[^#]/p' "$0" | sed '$d' >&2; exit 2; }
 
 # Each stack runs one root module of terraform/; both share terraform/modules/.
 case "${1:-}" in
@@ -44,6 +45,11 @@ case "${1:-}" in
   *) usage ;;
 esac
 shift
+
+# A deleted vault stays in its compartment for days; the base stack is kept.
+if [[ "${1:-}" == "destroy" && "$WORKDIR" != "main" ]]; then
+  die "the base stack is never destroyed by this script"
+fi
 
 : "${AFP_CONFIG_DIR:?AFP_CONFIG_DIR is not set}"
 TFVARS="$AFP_CONFIG_DIR/terraform.tfvars.json"
@@ -62,10 +68,14 @@ require_clean_tree() {
 
 head_sha() { git -C "$ROOT" rev-parse --short=12 HEAD; }
 
+# Print the stack's OCID, or nothing if it does not exist. Fails on CLI errors
+# (e.g. an expired session) instead of treating them as "not found".
 find_stack() {
-  oci_ resource-manager stack list --compartment-id "$TENANCY" \
+  local id
+  id="$(oci_ resource-manager stack list --compartment-id "$TENANCY" \
     --display-name "$STACK_NAME" --lifecycle-state ACTIVE \
-    --query 'data[0].id' --raw-output 2>/dev/null || true
+    --query 'data[0].id' --raw-output)" || die "cannot list stacks (is the OCI CLI session valid?)"
+  [[ "$id" == "null" ]] || printf '%s\n' "$id"
 }
 
 # Wait for a job and print its log; fail unless it succeeded.
@@ -171,8 +181,6 @@ cmd_apply() {
 
 cmd_destroy() {
   local stack_id answer
-  # A deleted vault stays in its compartment for days; the base stack is kept.
-  [[ "$WORKDIR" == "main" ]] || die "the base stack is never destroyed by this script"
   stack_id="$(find_stack)"
   [[ -n "$stack_id" && "$stack_id" != "null" ]] || die "stack not found"
 
