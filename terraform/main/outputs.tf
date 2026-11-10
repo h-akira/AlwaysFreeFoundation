@@ -1,7 +1,7 @@
 # Read by scripts/ (e.g. db-tunnel.sh) from the stack's state.
 
 output "compartment_id" {
-  value = module.iam.compartment_id
+  value = local.compartment_id
 }
 
 output "bastion_id" {
@@ -21,5 +21,5 @@ output "db_admin_username" {
 }
 
 output "db_admin_secret_id" {
-  value = module.vault.db_admin_secret_id
+  value = module.secrets.db_admin_secret_id
 }

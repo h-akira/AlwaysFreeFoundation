@@ -49,7 +49,7 @@ else
 fi
 
 # Stack outputs as KEY=VALUE lines (bash 3.2 compatible: no associative arrays).
-outputs="$("$ROOT/scripts/stack.sh" outputs)"
+outputs="$("$ROOT/scripts/stack.sh" main outputs)"
 out() {
   local value
   value="$(printf '%s\n' "$outputs" | sed -n "s/^$1=//p")"

@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # Send plan/apply jobs for terraform/ to OCI Resource Manager.
 #
-# Usage: stack.sh plan|apply|destroy|outputs
+# Usage: stack.sh base|main plan|apply|destroy|outputs
+#   base     Stack "afp-base" (terraform/base): what is never destroyed.
+#   main     Stack "afp" (terraform/main): everything else.
+#
 #   plan     Upload terraform/ at HEAD and the variables, then run a plan job.
 #   apply    Apply exactly the latest plan job, if it was made from HEAD.
-#   destroy  Destroy every resource of the stack (the stack itself is kept).
+#   destroy  Destroy every resource of the main stack (the stack itself is kept).
 #            Asks to type the stack name, or needs AFP_CONFIRM_DESTROY=<name>.
+#            Refused for the base stack.
 #   outputs  Print the stack's outputs as KEY=VALUE lines.
 #
 # Environment:
@@ -16,7 +20,6 @@
 # and its state is held by Resource Manager.
 set -euo pipefail
 
-STACK_NAME="afp"
 TERRAFORM_VERSION="1.5.x"
 JOB_MAX_WAIT_SECONDS=3600
 POLL_SECONDS=15
@@ -26,6 +29,21 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PY=(python3 "$ROOT/scripts/rm_values.py")
 
 die() { echo "stack.sh: $*" >&2; exit 1; }
+usage() { sed -n '2,20p' "$0" >&2; exit 2; }
+
+# Each stack runs one root module of terraform/; both share terraform/modules/.
+case "${1:-}" in
+  base)
+    STACK_NAME="afp-base"; WORKDIR="base"; MAKE_PREFIX="base-"
+    VARIABLE_KEYS="tenancy_ocid,region"
+    ;;
+  main)
+    STACK_NAME="afp"; WORKDIR="main"; MAKE_PREFIX=""
+    VARIABLE_KEYS=""
+    ;;
+  *) usage ;;
+esac
+shift
 
 : "${AFP_CONFIG_DIR:?AFP_CONFIG_DIR is not set}"
 TFVARS="$AFP_CONFIG_DIR/terraform.tfvars.json"
@@ -99,9 +117,10 @@ cmd_plan() {
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
 
-  # Archive the committed tree, not the working files.
+  # Archive the committed tree, not the working files. The whole of terraform/
+  # is sent so that the root module can reach ../modules.
   git -C "$ROOT" archive --format=zip -o "$tmp/stack.zip" HEAD:terraform
-  "${PY[@]}" variables "$TFVARS" > "$tmp/variables.json"
+  "${PY[@]}" variables "$TFVARS" ${VARIABLE_KEYS:+"$VARIABLE_KEYS"} > "$tmp/variables.json"
 
   stack_id="$(find_stack)"
   if [[ -z "$stack_id" || "$stack_id" == "null" ]]; then
@@ -110,18 +129,20 @@ cmd_plan() {
       --display-name "$STACK_NAME" --description "AlwaysFreePlatform" \
       --terraform-version "$TERRAFORM_VERSION" \
       --freeform-tags '{"afp":"stack"}' \
-      --config-source "$tmp/stack.zip" --variables "file://$tmp/variables.json" \
+      --config-source "$tmp/stack.zip" --working-directory "$WORKDIR" \
+      --variables "file://$tmp/variables.json" \
       --wait-for-state ACTIVE --query 'data.id' --raw-output)"
   else
     echo "Updating stack $STACK_NAME ..."
     oci_ resource-manager stack update --stack-id "$stack_id" \
-      --config-source "$tmp/stack.zip" --variables "file://$tmp/variables.json" \
+      --config-source "$tmp/stack.zip" --working-directory "$WORKDIR" \
+      --variables "file://$tmp/variables.json" \
       --force --wait-for-state ACTIVE > /dev/null
   fi
 
   echo "Planning $sha ..."
   run_job create-plan-job --stack-id "$stack_id" --display-name "plan-$sha"
-  echo "Plan of $sha succeeded. Run 'make apply' to apply it."
+  echo "Plan of $sha succeeded. Run 'make ${MAKE_PREFIX}apply' to apply it."
 }
 
 cmd_apply() {
@@ -129,7 +150,7 @@ cmd_apply() {
   local sha stack_id plan
   sha="$(head_sha)"
   stack_id="$(find_stack)"
-  [[ -n "$stack_id" && "$stack_id" != "null" ]] || die "stack not found; run 'make plan' first"
+  [[ -n "$stack_id" && "$stack_id" != "null" ]] || die "stack not found; run 'make ${MAKE_PREFIX}plan' first"
 
   # Latest job of the stack must be a successful plan of HEAD.
   plan="$(oci_ resource-manager job list --stack-id "$stack_id" \
@@ -138,9 +159,9 @@ cmd_apply() {
     --raw-output)"
   read -r plan_id operation state name <<< "$plan"
   [[ "$operation" == "PLAN" && "$state" == "SUCCEEDED" ]] \
-    || die "latest job is not a successful plan ($operation $state); run 'make plan'"
+    || die "latest job is not a successful plan ($operation $state); run 'make ${MAKE_PREFIX}plan'"
   [[ "$name" == "plan-$sha" ]] \
-    || die "latest plan ($name) is not of HEAD ($sha); run 'make plan'"
+    || die "latest plan ($name) is not of HEAD ($sha); run 'make ${MAKE_PREFIX}plan'"
 
   echo "Applying $name ..."
   run_job create-apply-job --stack-id "$stack_id" --display-name "apply-$sha" \
@@ -150,6 +171,8 @@ cmd_apply() {
 
 cmd_destroy() {
   local stack_id answer
+  # A deleted vault stays in its compartment for days; the base stack is kept.
+  [[ "$WORKDIR" == "main" ]] || die "the base stack is never destroyed by this script"
   stack_id="$(find_stack)"
   [[ -n "$stack_id" && "$stack_id" != "null" ]] || die "stack not found"
 
@@ -178,5 +201,5 @@ case "${1:-}" in
   apply) cmd_apply ;;
   destroy) cmd_destroy ;;
   outputs) cmd_outputs ;;
-  *) sed -n '2,15p' "$0" >&2; exit 2 ;;
+  *) usage ;;
 esac

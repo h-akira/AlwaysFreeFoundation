@@ -7,7 +7,7 @@ resource "oci_identity_compartment" "afp" {
   compartment_id = var.tenancy_ocid
   name           = "afp"
   description    = "AlwaysFreePlatform"
-  # Deleted with the stack while the platform is being tested.
+  # Deletable while the platform is being tested.
   enable_delete = true
 }
 

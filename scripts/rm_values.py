@@ -2,7 +2,10 @@
 """Value conversion helpers for scripts/*.sh (Python standard library only).
 
 Subcommands:
-  variables TFVARS_JSON      Print Resource Manager stack variables as JSON.
+  variables TFVARS_JSON [KEYS]
+                             Print Resource Manager stack variables as JSON.
+                             KEYS (comma separated) limits them to those keys,
+                             which must all be set.
   get TFVARS_JSON KEY        Print one top-level value from the tfvars file.
   outputs                    Read a Terraform state from stdin and print
                              outputs as KEY=VALUE lines.
@@ -29,6 +32,14 @@ def to_rm_variables(tfvars: dict[str, Any]) -> dict[str, str]:
     return result
 
 
+def select_keys(tfvars: dict[str, Any], keys: list[str]) -> dict[str, Any]:
+    """Keep only the given keys; each must be present."""
+    missing = [key for key in keys if key not in tfvars]
+    if missing:
+        raise ValueError(f"not set: {', '.join(missing)}")
+    return {key: tfvars[key] for key in keys}
+
+
 def state_outputs(state: dict[str, Any]) -> dict[str, str]:
     """Extract outputs from a Terraform state as strings."""
     result: dict[str, str] = {}
@@ -49,8 +60,11 @@ def _load_json(path: str) -> dict[str, Any]:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) == 2 and argv[0] == "variables":
-        print(json.dumps(to_rm_variables(_load_json(argv[1]))))
+    if len(argv) in (2, 3) and argv[0] == "variables":
+        tfvars = _load_json(argv[1])
+        if len(argv) == 3:
+            tfvars = select_keys(tfvars, [key for key in argv[2].split(",") if key])
+        print(json.dumps(to_rm_variables(tfvars)))
     elif len(argv) == 3 and argv[0] == "get":
         value = _load_json(argv[1]).get(argv[2])
         if value is None:

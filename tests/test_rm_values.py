@@ -38,6 +38,19 @@ def test_null_is_rejected() -> None:
         rm_values.to_rm_variables({"x": None})
 
 
+def test_select_keys_keeps_only_given_keys() -> None:
+    tfvars = {"tenancy_ocid": "ocid1.tenancy.oc1..xxxx", "region": "us-ashburn-1", "home_cidrs": ["192.0.2.10/32"]}
+    assert rm_values.select_keys(tfvars, ["tenancy_ocid", "region"]) == {
+        "tenancy_ocid": "ocid1.tenancy.oc1..xxxx",
+        "region": "us-ashburn-1",
+    }
+
+
+def test_select_keys_rejects_missing() -> None:
+    with pytest.raises(ValueError, match="region"):
+        rm_values.select_keys({"tenancy_ocid": "ocid1.tenancy.oc1..xxxx"}, ["tenancy_ocid", "region"])
+
+
 def test_state_outputs_skips_sensitive() -> None:
     state = {
         "outputs": {
@@ -61,3 +74,16 @@ def test_cli_get_and_variables(tmp_path: Path) -> None:
 
     variables = subprocess.run([sys.executable, SCRIPT, "variables", path], capture_output=True, text=True, check=True)
     assert json.loads(variables.stdout) == {"region": "us-ashburn-1", "home_cidrs": '["192.0.2.10/32"]'}
+
+
+def test_cli_variables_with_keys(tmp_path: Path) -> None:
+    path = tmp_path / "terraform.tfvars.json"
+    path.write_text(json.dumps({"region": "us-ashburn-1", "home_cidrs": ["192.0.2.10/32"]}))
+
+    only = subprocess.run(
+        [sys.executable, SCRIPT, "variables", path, "region"], capture_output=True, text=True, check=True
+    )
+    assert json.loads(only.stdout) == {"region": "us-ashburn-1"}
+
+    missing = subprocess.run([sys.executable, SCRIPT, "variables", path, "region,tenancy_ocid"], capture_output=True, text=True)
+    assert missing.returncode != 0
