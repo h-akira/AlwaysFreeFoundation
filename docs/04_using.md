@@ -56,7 +56,8 @@ networks:
     external: true
 ```
 
-- `AFP_IMAGE_PREFIX`・`AFP_TAG` の形と、ビルドの手順（OCI DevOps の `build_spec.yaml`）の書き方は、基盤を作りながら確かめて決める（未決）。
+- `AFP_TAG` は、デプロイする版の名前。プロジェクトが push したタグの名前そのもの。
+- `AFP_IMAGE_PREFIX` の形と、ビルドの手順（OCI DevOps の `build_spec.yaml`）の書き方は、基盤を作りながら確かめて決める（未決）。
 - 動く見本は、基盤のリポジトリの `examples/hello` に置く。
 
 ## 3. 基盤が渡す値
@@ -65,7 +66,8 @@ networks:
 
 | 変数 | 中身 |
 |---|---|
-| `AFP_IMAGE_PREFIX`・`AFP_TAG` | イメージの置き場所と版（形は未決。§2） |
+| `AFP_IMAGE_PREFIX` | イメージの置き場所（形は未決。§2） |
+| `AFP_TAG` | デプロイする版（タグの名前） |
 | `AFP_PROJECT` | プロジェクトの名前 |
 | `AFP_DOMAIN` | プロジェクトのドメイン |
 | `AFP_DB_HOST`・`AFP_DB_PORT` | DB の接続先 |
