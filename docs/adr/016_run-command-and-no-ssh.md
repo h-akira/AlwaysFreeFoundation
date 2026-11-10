@@ -1,7 +1,6 @@
 # 016 `afp deploy` は Run Command で実行させ、VM への ssh は保守のときだけ Bastion で通す
 
 - 決めた日: 2026-11-10
-- 状態: 採用
 
 ## 背景
 
