@@ -1,6 +1,6 @@
-# Stack "afp-base": what is never destroyed with the main stack (terraform/main).
+# Stack "afp-base": only what Terraform destroy cannot remove.
 # A deleted vault stays PENDING_DELETION inside its compartment, so neither can
-# be destroyed and recreated repeatedly.
+# be destroyed and recreated repeatedly. Everything else is in terraform/main.
 
 module "iam" {
   source       = "../modules/iam"

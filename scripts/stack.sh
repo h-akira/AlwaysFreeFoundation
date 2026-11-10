@@ -2,7 +2,7 @@
 # Send plan/apply jobs for terraform/ to OCI Resource Manager.
 #
 # Usage: stack.sh base|main plan|apply|destroy|outputs
-#   base     Stack "afp-base" (terraform/base): what is never destroyed.
+#   base     Stack "afp-base" (terraform/base): what destroy cannot remove.
 #   main     Stack "afp" (terraform/main): everything else.
 #
 #   plan     Upload terraform/ at HEAD and the variables, then run a plan job.
