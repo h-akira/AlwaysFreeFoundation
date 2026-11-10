@@ -21,6 +21,7 @@ Vault・鍵・シークレットは、消してもすぐには消えない。**�
 
 - Terraform の destroy で、シークレット・鍵・Vault は削除待ちになった時点で「消えた」として次に進んだ。最後のコンパートメントの削除だけが失敗した（`expected DELETED, but ACTIVE`）（実測 2026-11-09）。
 - 削除待ちの Vault はコンパートメントの中に残る。中身の残るコンパートメントは消せない。
+- Terraform の destroy でシークレットを消すと、削除待ちの期間は既定の 30 日になった（実測 2026-11-10）。
 - 削除待ちの Vault も、Vault の一覧（`oci kms management vault list`）に `PENDING_DELETION` として出てくる。一覧の `time-of-deletion` は空だった（実測 2026-11-10）。
 - 削除待ちの Vault と同じ名前の Vault を、同じコンパートメントに新しく作れた（実測 2026-11-10）。名前で探すときは、状態（`ACTIVE`）でも絞る。
 
