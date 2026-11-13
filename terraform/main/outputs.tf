@@ -23,3 +23,23 @@ output "db_admin_username" {
 output "db_admin_secret_id" {
   value = module.secrets.db_admin_secret_id
 }
+
+output "bucket" {
+  value = module.storage.bucket_name
+}
+
+output "namespace" {
+  value = data.oci_objectstorage_namespace.this.namespace
+}
+
+output "vm_id" {
+  value = module.vm.instance_id
+}
+
+output "vm_private_ip" {
+  value = module.vm.private_ip
+}
+
+output "vm_public_ip" {
+  value = module.vm.public_ip
+}

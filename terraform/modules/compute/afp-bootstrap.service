@@ -1,0 +1,16 @@
+[Unit]
+Description=Bring the VM up to the AlwaysFreePlatform code (afp-bootstrap)
+Wants=network-online.target
+After=network-online.target
+# Retry forever: it waits for the reserved IP and for platform.json.
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/afp-bootstrap
+Restart=on-failure
+RestartSec=60
+TimeoutStartSec=infinity
+
+[Install]
+WantedBy=multi-user.target

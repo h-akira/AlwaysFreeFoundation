@@ -7,7 +7,7 @@ export AFP_CONFIG_DIR
 
 PYTHON ?= $(ROOT)/env/bin/python
 
-.PHONY: help plan apply destroy outputs base-plan base-apply base-outputs db-tunnel lint test env
+.PHONY: help plan apply destroy outputs base-plan base-apply base-outputs db-tunnel ssh lint test env
 
 help: ## Show targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | sed 's/:.*## /\t/'
@@ -35,6 +35,9 @@ base-outputs: ## Base stack: print the outputs
 
 db-tunnel: ## Open a Bastion tunnel to the DB (foreground; Ctrl-C to close)
 	@$(ROOT)/scripts/db-tunnel.sh
+
+ssh: ## ssh into the VM through the Bastion; CMD='...' runs a command instead of a shell
+	@$(ROOT)/scripts/vm-ssh.sh $(CMD)
 
 lint: ## Check formatting and validate terraform/; shellcheck if installed
 	terraform -chdir=$(ROOT)/terraform fmt -recursive -check

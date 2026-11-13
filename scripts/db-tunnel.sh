@@ -16,6 +16,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PY=(python3 "$ROOT/scripts/rm_values.py")
+# shellcheck source=SCRIPTDIR/lib.sh
+source "$ROOT/scripts/lib.sh"
 
 die() { echo "db-tunnel.sh: $*" >&2; exit 1; }
 
@@ -28,12 +30,9 @@ LOCAL_PORT="${AFP_DB_LOCAL_PORT:-13306}"
 SESSION_TTL="${AFP_SESSION_TTL:-10800}"
 oci_() { oci --region "$REGION" "$@"; }
 
-session_id=""
 tmp="$(mktemp -d)"
 cleanup() {
-  if [[ -n "$session_id" ]]; then
-    oci_ bastion session delete --session-id "$session_id" --force > /dev/null 2>&1 || true
-  fi
+  [[ -z "$BASTION_SESSION_ID" ]] || bastion_delete_session
   rm -rf "$tmp"
 }
 trap cleanup EXIT
@@ -48,35 +47,14 @@ else
   ssh-keygen -q -t ed25519 -N "" -C "afp-db-tunnel" -f "$PRIVATE_KEY"
 fi
 
-# Stack outputs as KEY=VALUE lines (bash 3.2 compatible: no associative arrays).
-outputs="$("$ROOT/scripts/stack.sh" main outputs)"
-out() {
-  local value
-  value="$(printf '%s\n' "$outputs" | sed -n "s/^$1=//p")"
-  [[ -n "$value" ]] || die "stack output $1 is missing; run 'make apply' first"
-  printf '%s' "$value"
-}
+load_outputs
 BASTION_ID="$(out bastion_id)"
 DB_IP="$(out db_ip)"
 DB_PORT="$(out db_port)"
 DB_USER="$(out db_admin_username)"
 SECRET_ID="$(out db_admin_secret_id)"
 
-echo "Creating a Bastion session (TTL ${SESSION_TTL}s) ..."
-session_id="$(oci_ bastion session create-port-forwarding \
-  --bastion-id "$BASTION_ID" --display-name "afp-db-tunnel" \
-  --target-private-ip "${DB_IP}" --target-port "${DB_PORT}" \
-  --ssh-public-key-file "$PUBLIC_KEY" --key-type PUB --session-ttl "$SESSION_TTL" \
-  --query 'data.id' --raw-output)"
-
-for _ in $(seq 60); do
-  state="$(oci_ bastion session get --session-id "$session_id" \
-    --query 'data."lifecycle-state"' --raw-output)"
-  [[ "$state" == "ACTIVE" ]] && break
-  [[ "$state" == "CREATING" ]] || die "session $session_id is $state"
-  sleep 5
-done
-[[ "$state" == "ACTIVE" ]] || die "session $session_id did not become ACTIVE"
+bastion_create_session "$BASTION_ID" afp-db-tunnel "$DB_IP" "$DB_PORT" "$PUBLIC_KEY" "$SESSION_TTL"
 
 cat <<EOF
 
@@ -95,4 +73,4 @@ ssh -i "$PRIVATE_KEY" -N \
   -o ServerAliveInterval=60 -o StrictHostKeyChecking=accept-new \
   -o UserKnownHostsFile="$tmp/known_hosts" \
   -L "127.0.0.1:${LOCAL_PORT}:${DB_IP}:${DB_PORT}" \
-  "${session_id}@host.bastion.${REGION}.oci.oraclecloud.com"
+  "$(bastion_host)"
