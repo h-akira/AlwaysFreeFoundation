@@ -63,15 +63,23 @@ for i in $(seq 90); do
   sleep 10
 done
 
-# 3. Packages.
+# 3. Packages. On 1 GB of memory, loading every enabled repository's metadata
+# takes most of the time (ol9_oci_included alone took about 9 minutes), so
+# each install enables only the repositories it needs. No man pages either.
+dnf_() {
+  local repos="$1"; shift
+  dnf install -y --setopt=tsflags=nodocs --disablerepo='*' --enablerepo="$repos" "$@"
+}
 if ! rpm -q docker-ce docker-compose-plugin > /dev/null 2>&1; then
   log "installing Docker"
-  dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
-  dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+  [[ -f /etc/yum.repos.d/docker-ce.repo ]] \
+    || dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
+  dnf_ docker-ce-stable,ol9_baseos_latest,ol9_appstream \
+    docker-ce docker-ce-cli containerd.io docker-compose-plugin
 fi
 if ! rpm -q python39-oci-cli > /dev/null 2>&1; then
   log "installing the OCI CLI"
-  dnf install -y python39-oci-cli
+  dnf_ ol9_oci_included,ol9_baseos_latest,ol9_appstream python39-oci-cli
 fi
 
 mkdir -p /etc/docker
