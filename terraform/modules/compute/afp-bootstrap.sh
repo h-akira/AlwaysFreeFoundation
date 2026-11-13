@@ -5,6 +5,7 @@
 # succeeds, and through Run Command (sudo) by make platform and make apply.
 # Every step is idempotent, so running it again only does what is missing.
 #
+#   0. no kdump: free the crash kernel reservation (reboots once if needed)
 #   1. swap; stop dnf's background metadata refresh
 #   2. wait until the VM can reach the internet (the reserved IP comes later)
 #   3. Docker, the compose plugin and the OCI CLI
@@ -41,6 +42,30 @@ put_file() {
 }
 
 json_get() { python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$1" "$2"; }
+
+# 0. Oracle Linux 9 reserves 448 MB for kdump (crashkernel=1G-64G:448M)
+# whenever the VM sees at least 1 GB, which an E2.1.Micro sometimes does.
+# The VM is replaced rather than debugged, so kdump is turned off.
+if [[ -f /etc/kdump.conf ]]; then
+  sed -i -E 's/^([[:space:]]*auto_reset_crashkernel[[:space:]]+)yes/\1no/' /etc/kdump.conf
+fi
+systemctl disable --now kdump.service > /dev/null 2>&1 || true
+if grubby --info=ALL | grep -q 'crashkernel='; then
+  grubby --update-kernel=ALL --remove-args=crashkernel
+fi
+# Arguments for kernels installed later.
+for f in /etc/default/grub /etc/kernel/cmdline; do
+  if [[ -f "$f" ]]; then
+    sed -i -E 's/ ?crashkernel=[^ "]*//g' "$f"
+  fi
+done
+if [[ "$(cat /sys/kernel/kexec_crash_size)" != "0" ]]; then
+  # Never loop: reboot only if the next boot will really be without it.
+  grubby --info=DEFAULT | grep -q 'crashkernel=' && die "cannot remove crashkernel"
+  log "rebooting to release the kdump memory reservation"
+  systemctl reboot
+  exit 0
+fi
 
 # 1. Swap first: dnf alone can exhaust 1 GB of memory.
 if ! swapon --show=NAME --noheadings | grep -qx "$SWAP_FILE"; then
