@@ -2,7 +2,7 @@
 
 外から直接届かない資源（プライベート・サブネットの VM や DB）に、手元から一時的に入るための OCI のサービス。踏み台のサーバを自分で立てる代わりに、OCI が用意する踏み台を使う。
 
-- **確かめた日**: 2026-11-09（Oracle の公式文書と、実際にポート転送で MySQL に入った結果）
+- **確かめた日**: 2026-11-09（Oracle の公式文書と、実際にポート転送で MySQL に入った結果）。§4 は 2026-11-13（VM に ssh で入った結果）
 
 ## 1. 要点
 
@@ -43,7 +43,14 @@ sequenceDiagram
 4. セッションの詳細に表示される ssh のコマンド（`ssh -i <秘密鍵> -N -L <手元のポート>:<対象の IP>:<対象のポート> ...` の形）を手元で実行し、つないだままにする。
 5. 別のターミナルから、`127.0.0.1:<手元のポート>` に向けて接続する。
 
-## 4. 出典
+## 4. ポート転送で VM に ssh で入る
+
+- 宛先を VM のプライベート IP の 22 番にしたポート転送のセッションで、VM に ssh で入れた。VM の側に Bastion のプラグインは要らない（実測）。
+- §3 と同じく、Bastion の口があるサブネットのセキュリティ・リストに、VM の 22 番へ出る向き（egress）を足し、VM の側には口のサブネットからの 22 番を許す。
+- `ssh -L` で手元のポートを開く形のほか、`ssh -o ProxyCommand="ssh -W %h:%p <セッション>@host.bastion.<リージョン>.oci.oraclecloud.com" opc@<VM の IP>` の形（1 つのコマンドで入れる）も使えた（実測）。
+- セッションが `ACTIVE` になった直後は、数秒の間、鍵が断られた（`Permission denied (publickey)`）。15 秒ほど待つと通った（実測）。
+
+## 5. 出典
 
 - [Bastion Overview](https://docs.oracle.com/en-us/iaas/Content/Bastion/Concepts/bastionoverview.htm)（セッションの種類・許可リスト・料金）
 - [Creating an SSH Port Forwarding Session](https://docs.oracle.com/en-us/iaas/Content/Bastion/Tasks/create-session-port-forwarding.htm)（作り方・最長の時間）

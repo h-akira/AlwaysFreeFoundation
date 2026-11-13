@@ -111,7 +111,7 @@ sequenceDiagram
   V->>V: Caddy が証明書を取り直す
 ```
 
-- IP は予約済みのものを付け替えるので、プロジェクトの DNS は変えなくてよい。予約済みの公開 IP の料金と個数の上限は未確認。
+- IP は予約済みのものを付け替えるので、プロジェクトの DNS は変えなくてよい。予約済みの公開 IP は無料とされている（[references/oci-free-tier.md](references/oci-free-tier.md) §2）。
 
 ## 5. 主な決定
 
@@ -148,7 +148,7 @@ sequenceDiagram
 
 - **各プロジェクトのリポジトリ** にタグ（例: `v1.2.3`）を push すると、そのプロジェクトだけをビルドし、VM でデプロイするところまで自動で行う。デプロイした版の名前は、タグの名前そのもの。
 - **基盤のコードも、タグで版を決めて VM に届ける**。どのタグを使うかを Object Storage に置き、VM の `afp` はそのタグのコードを公開リポジトリから取って入れ替える。
-- VM でデプロイを実行するのは、DevOps の **インスタンス・グループへのデプロイ**（AWS の CodeDeploy に当たる）。VM の中の **Oracle Cloud Agent**（OCI のイメージに入っているエージェント）の **Run Command** のプラグインが、`afp deploy <プロジェクト> <版>` を実行する（[references/oci-devops.md](references/oci-devops.md)）。
+- VM でデプロイを実行するのは、DevOps の **インスタンス・グループへのデプロイ**（AWS の CodeDeploy に当たる）。VM の中の **Oracle Cloud Agent**（OCI のイメージに入っているエージェント）の **Run Command** のプラグインが、`afp deploy <プロジェクト> <版>` を実行する（[references/oci-devops.md](references/oci-devops.md)・[references/oci-run-command.md](references/oci-run-command.md)）。
 - DevOps が使えないときは、手元から同じ Run Command を直接呼んで `afp deploy` を実行させる。
 - デプロイには ssh を使わない。
 

@@ -10,6 +10,7 @@ E2.1.Micro で基盤の VM を作ってみると、1 GB では次のことが起
 
 - 初回の起動（dnf で Docker と OCI CLI を入れる）に約 29 分かかった。スワップは最大 1.5 GB 使った。
 - 何もしていない状態（Docker は動いていて、コンテナは無い）で、空きは約 440 MB だった。
+- 詳しくは [references/oci-compute-vm.md](../references/oci-compute-vm.md)。
 
 A1 の空きを確かめると、取れることがあった（2026-11-13・実測）。
 

@@ -6,7 +6,7 @@
 
 Oracle Linux 9 は、カーネルが落ちたときの記録（kdump）のために、起動の引数 `crashkernel=1G-64G:448M,64G-:512M` でメモリを取っておく。OS から見えるメモリが 1 GB 以上なら、448 MB を取る（[Kdump System Memory Requirements](https://docs.oracle.com/en/operating-systems/oracle-linux/9/boot/kdump_system_requirements.html)、[Linux カーネルの文書](https://docs.kernel.org/admin-guide/kdump/kdump.html)。2026-11-13 確認）。
 
-同じイメージから作った 2 台の E2.1.Micro で、OS から見えるメモリが違った（2026-11-13 実測）。1 台は 945 MB で予約されず、もう 1 台は 1 GB に見えて 448 MB 取られ、使えるのは 498 MB だった。どちらになるかは、作るまで分からない。A1 でも、2〜8 GB の arm64 なら 256 MB を取る。
+同じイメージから作った 2 台の E2.1.Micro で、OS から見えるメモリが違った（2026-11-13 実測）。1 台は 945 MB で予約されず、もう 1 台は 1 GB に見えて 448 MB 取られ、使えるのは 498 MB だった。どちらになるかは、作るまで分からない。A1 でも、2〜8 GB の arm64 なら 256 MB を取る（[references/oci-compute-vm.md](../references/oci-compute-vm.md) §1・§2）。
 
 ## 決定
 

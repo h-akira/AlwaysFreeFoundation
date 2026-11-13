@@ -30,3 +30,5 @@ OCI の Always Free を最大限に使い、個人開発の複数のプロジェ
 | [OCI Resource Manager](docs/references/oci-resource-manager.md) | Terraform を OCI の側で実行するサービスの使い方と癖 |
 | [OCI Vault](docs/references/oci-vault.md) | 鍵とシークレットの削除待ちと、それが削除に与える影響 |
 | [OCI DevOps](docs/references/oci-devops.md) | VM へのデプロイ（インスタンス・グループ・Run Command）の仕組みと制約 |
+| [OCI の Run Command](docs/references/oci-run-command.md) | VM の中のエージェントにコマンドを実行させる仕組み、届くまでの時間と制限 |
+| [OCI の Compute の VM](docs/references/oci-compute-vm.md) | Oracle Linux 9 の小さな VM（E2.1.Micro・A1）で分かったこと（kdump の予約・dnf・firewalld・エージェント） |

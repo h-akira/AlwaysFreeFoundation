@@ -2,7 +2,7 @@
 
 OCI（Oracle Cloud Infrastructure）の無料枠を調べた結果。
 
-- **確かめた日**: 2026-11-07（Oracle の公式文書）
+- **確かめた日**: 2026-11-07（Oracle の公式文書）。予約済みの公開 IP・Cloud Guard・アイドル回収は 2026-11-13
 - **無料枠は変わる**（2026-06 に A1 の枠が半分になった）。使う前に §6 の出典で確かめ直す。
 
 ## 1. 無料枠の種類
@@ -37,6 +37,8 @@ OCI（Oracle Cloud Infrastructure）の無料枠を調べた結果。
   - **OCIR**（コンテナ・レジストリ）: 「レジストリ自体は無料、保存は Object Storage の料金」とされるが、無料枠に含まれるかは公式に確かめられなかった。
   - **Artifact Registry**: 料金と無料枠を確かめていない。
 - **OCI DevOps は Always Free ではない**。パイプラインそのものは無料で、ビルドの実行の分だけ課金される。
+- **予約済みの公開 IP**: Oracle の価格の API（§6）に品目が無い。予約済みの公開 IP を出したときの Oracle の発表では「料金はかからない」とされている（古い発表で、今の価格表の記述では確かめられなかった）。上限（`reserved-public-ip-count`）はリージョンあたり 50 だった（2026-11-13 実測。テナンシによって違いうる）。
+- **Cloud Guard**: 設定と操作の見張り（Configuration・Activity の検出）は、価格の API に品目が無い。無料のテナンシ（Always Free だけ）では有効にできない（公式文書）。VM の中を見張る Instance Security は、Standard が 1 台・1 時間あたり 0 円、Enterprise が 1 台・1 時間あたり 1.0695 円（1 台を 1 か月動かすと約 780 円）。都度の問い合わせ（Enterprise）は月 95 万回まで 0 円、それを超えると 1 回 0.155 円（2026-11-13 に価格の API で確認。品目 B108188・B108189・B108190）。無料のレシピ（Standard）は、検出の規則が 2 つで、1 リージョンあたり 5 台まで（公式文書）。
 
 ## 3. MySQL HeatWave の Always Free
 
@@ -83,7 +85,7 @@ Always Free の Compute は、7 日間で次の **すべて** を満たすと回
 - ネットワーク使用率が 20% 未満
 - メモリ使用率が 20% 未満（A1 だけ）
 
-PAYG のアカウントは対象外という情報が多いが（コミュニティの投稿・ブログ）、公式文書では確かめられなかった。
+PAYG のアカウントは対象外という情報が多いが（コミュニティの投稿・ブログ）、公式文書では確かめられなかった。公式文書は「Always Free の Compute のインスタンス」が対象と書くだけで、PAYG のアカウントの扱いには触れていない（2026-11-13 に確認し直した）。
 
 ## 6. 出典
 
@@ -91,3 +93,7 @@ PAYG のアカウントは対象外という情報が多いが（コミュニテ
 - [MySQL HeatWave Service の機能（Always Free）](https://docs.oracle.com/iaas/mysql-database/doc/features-mysql-heatwave-service.html)
 - [Always Free の MySQL の DB システムの作成](https://docs.oracle.com/iaas/mysql-database/doc/creating-always-free-db-system.html)
 - [Always Free Autonomous Database の制限](https://docs.oracle.com/en-us/iaas/autonomous-database-serverless/doc/autonomous-always-free.html)
+- Oracle の価格の API: `https://apexapps.oracle.com/pls/apex/cetools/api/v1/products/?currencyCode=JPY`（Oracle の見積もりの道具が使う価格表。Cloud Guard・公開 IP。2026-11-13）
+- [Release Announcement: Reserved Public IPs](https://blogs.oracle.com/cloud-infrastructure/release-announcement-reserved-public-ips-are-now-available-on-oracle-cloud-infrastructure)（予約済みの公開 IP は無料とする発表）
+- [Instance Security](https://docs.oracle.com/en-us/iaas/cloud-guard/using/cgis.htm)（Cloud Guard の Instance Security の無料のレシピ）
+- [Getting Started with Cloud Guard](https://docs.oracle.com/en-us/iaas/cloud-guard/using/part-start.htm)（無料のテナンシでは有効にできない）
