@@ -3,8 +3,8 @@
 #
 # Usage: vm-ssh.sh [COMMAND ...]
 #   Creates a port-forwarding session to the VM's port 22, connects through it
-#   (ProxyCommand) and deletes the session on exit. Without COMMAND, opens an
-#   interactive shell.
+#   (ProxyCommand) and deletes the session on exit. Without COMMAND, runs
+#   AFP_SSH_COMMAND if set (make ssh CMD=...), else opens an interactive shell.
 #
 # Environment:
 #   AFP_CONFIG_DIR   Directory holding terraform.tfvars.json (required).
@@ -31,6 +31,9 @@ PUBLIC_KEY="$PRIVATE_KEY.pub"
 SESSION_TTL="${AFP_SESSION_TTL:-3600}"
 [[ -f "$PRIVATE_KEY" && -f "$PUBLIC_KEY" ]] || die "ssh key pair not found: $PRIVATE_KEY(.pub)"
 oci_() { oci --region "$REGION" "$@"; }
+if [[ $# -eq 0 && -n "${AFP_SSH_COMMAND:-}" ]]; then
+  set -- "$AFP_SSH_COMMAND"
+fi
 
 tmp="$(mktemp -d)"
 cleanup() {

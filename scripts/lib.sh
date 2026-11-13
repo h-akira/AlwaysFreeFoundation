@@ -33,7 +33,11 @@ bastion_create_session() {
   for _ in $(seq 60); do
     state="$(oci_ bastion session get --session-id "$BASTION_SESSION_ID" \
       --query 'data."lifecycle-state"' --raw-output)"
-    [[ "$state" == "ACTIVE" ]] && return 0
+    if [[ "$state" == "ACTIVE" ]]; then
+      # Right after ACTIVE the Bastion still rejects the key for a few seconds.
+      sleep "${BASTION_KEY_WAIT_SECONDS:-15}"
+      return 0
+    fi
     [[ "$state" == "CREATING" ]] || die "session $BASTION_SESSION_ID is $state"
     sleep 5
   done

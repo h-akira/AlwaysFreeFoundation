@@ -36,8 +36,10 @@ base-outputs: ## Base stack: print the outputs
 db-tunnel: ## Open a Bastion tunnel to the DB (foreground; Ctrl-C to close)
 	@$(ROOT)/scripts/db-tunnel.sh
 
+# CMD goes through the environment unexpanded, never through the recipe's shell.
+ssh: export AFP_SSH_COMMAND = $(value CMD)
 ssh: ## ssh into the VM through the Bastion; CMD='...' runs a command instead of a shell
-	@$(ROOT)/scripts/vm-ssh.sh $(CMD)
+	@$(ROOT)/scripts/vm-ssh.sh
 
 lint: ## Check formatting and validate terraform/; shellcheck if installed
 	terraform -chdir=$(ROOT)/terraform fmt -recursive -check
