@@ -75,9 +75,9 @@ variable "platform_repository" {
 }
 
 variable "vm_shape" {
-  description = "Shape of the VM. Flexible shapes (*.Flex) also use vm_ocpus and vm_memory_in_gbs."
+  description = "Shape of the VM: VM.Standard.A1.Flex (arm64) when it can be created, else VM.Standard.E2.1.Micro (amd64). Flexible shapes (*.Flex) also use vm_ocpus and vm_memory_in_gbs. Changing the CPU type means rebuilding every project's images."
   type        = string
-  default     = "VM.Standard.E2.1.Micro"
+  default     = "VM.Standard.A1.Flex"
 }
 
 variable "vm_ocpus" {
@@ -89,7 +89,7 @@ variable "vm_ocpus" {
 variable "vm_memory_in_gbs" {
   description = "Memory of the VM in GB, for flexible shapes only."
   type        = number
-  default     = 1
+  default     = 6
 }
 
 variable "vm_availability_domain_index" {

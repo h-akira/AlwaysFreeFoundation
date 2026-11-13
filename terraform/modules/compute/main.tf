@@ -52,7 +52,8 @@ data "oci_identity_availability_domains" "all" {
   compartment_id = var.tenancy_ocid
 }
 
-# Latest Oracle Linux 9 platform image for the shape (no GPU or minimal images).
+# Latest Oracle Linux 9 platform image for the shape (no GPU or minimal images;
+# arm64 images are named Oracle-Linux-9.x-aarch64-...).
 data "oci_core_images" "ol9" {
   compartment_id           = var.compartment_id
   operating_system         = "Oracle Linux"
@@ -64,13 +65,15 @@ data "oci_core_images" "ol9" {
 
   filter {
     name   = "display_name"
-    values = ["^Oracle-Linux-9\\.[0-9]+-[0-9]{4}\\.[0-9]{2}\\.[0-9]{2}-[0-9]+$"]
+    values = ["^Oracle-Linux-9\\.[0-9]+-(aarch64-)?[0-9]{4}\\.[0-9]{2}\\.[0-9]{2}-[0-9]+$"]
     regex  = true
   }
 }
 
+# Replaces the VM when either changes. A new shape may need an image of
+# another CPU type, which the ignored source_id would never pick up.
 resource "terraform_data" "generation" {
-  input = var.generation
+  input = { generation = var.generation, shape = var.shape }
 }
 
 resource "terraform_data" "ready" {
@@ -176,6 +179,11 @@ output "instance_id" {
 
 output "private_ip" {
   value = oci_core_instance.vm.private_ip
+}
+
+# CPU type that images must be built for.
+output "arch" {
+  value = startswith(var.shape, "VM.Standard.A") ? "arm64" : "amd64"
 }
 
 output "public_ip" {

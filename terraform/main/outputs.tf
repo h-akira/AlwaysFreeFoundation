@@ -43,3 +43,7 @@ output "vm_private_ip" {
 output "vm_public_ip" {
   value = module.vm.public_ip
 }
+
+output "vm_arch" {
+  value = module.vm.arch
+}
