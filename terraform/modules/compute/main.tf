@@ -141,12 +141,6 @@ resource "oci_core_instance" "vm" {
       name          = "Compute Instance Run Command"
       desired_state = "ENABLED"
     }
-    # Enabled by default on the image; the platform does not use Cloud Guard
-    # Instance Security, and the VM has little memory to spare.
-    plugins_config {
-      name          = "Cloud Guard Workload Protection"
-      desired_state = "DISABLED"
-    }
   }
 
   lifecycle {
