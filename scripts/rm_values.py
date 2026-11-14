@@ -9,6 +9,10 @@ Subcommands:
   get TFVARS_JSON KEY        Print one top-level value from the tfvars file.
   outputs                    Read a Terraform state from stdin and print
                              outputs as KEY=VALUE lines.
+  execution                  Read a Run Command execution (oci instance-agent
+                             command-execution get) from stdin; print
+                             "STATE EXIT_CODE" and then the output text.
+  command-content SCRIPT     Print the --content of a Run Command for SCRIPT.
 """
 
 from __future__ import annotations
@@ -51,6 +55,18 @@ def state_outputs(state: dict[str, Any]) -> dict[str, str]:
     return result
 
 
+def execution_result(execution: dict[str, Any]) -> tuple[str, str, str]:
+    """State, exit code ("-" if none yet) and output text of an execution."""
+    data = execution.get("data", execution)
+    content = data.get("content") or {}
+    code = content.get("exit-code")
+    return str(data.get("lifecycle-state")), "-" if code is None else str(code), content.get("text") or ""
+
+
+def command_content(script: str) -> dict[str, Any]:
+    return {"source": {"sourceType": "TEXT", "text": script}, "output": {"outputType": "TEXT"}}
+
+
 def _load_json(path: str) -> dict[str, Any]:
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
@@ -71,6 +87,12 @@ def main(argv: list[str]) -> int:
             print(f"{argv[1]}: {argv[2]} is not set", file=sys.stderr)
             return 1
         print(value if isinstance(value, str) else json.dumps(value))
+    elif len(argv) == 1 and argv[0] == "execution":
+        state, code, text = execution_result(json.load(sys.stdin))
+        print(f"{state} {code}")
+        print(text, end="" if text.endswith("\n") or not text else "\n")
+    elif len(argv) == 2 and argv[0] == "command-content":
+        print(json.dumps(command_content(argv[1])))
     elif len(argv) == 1 and argv[0] == "outputs":
         for key, value in state_outputs(json.load(sys.stdin)).items():
             print(f"{key}={value}")

@@ -93,3 +93,17 @@ def test_cli_variables_with_keys(tmp_path: Path) -> None:
     # An empty key list selects nothing.
     empty = subprocess.run([sys.executable, SCRIPT, "variables", path, ","], capture_output=True, text=True, check=True)
     assert json.loads(empty.stdout) == {}
+
+
+def test_execution_result() -> None:
+    done = {"data": {"lifecycle-state": "FAILED", "content": {"exit-code": 3, "text": "boom"}}}
+    assert rm_values.execution_result(done) == ("FAILED", "3", "boom")
+    waiting = {"data": {"lifecycle-state": "ACCEPTED", "content": None}}
+    assert rm_values.execution_result(waiting) == ("ACCEPTED", "-", "")
+
+
+def test_command_content_keeps_the_script_intact() -> None:
+    script = "sudo -n /usr/local/sbin/afp-bootstrap; echo \"$HOME\" 'x'"
+    out = subprocess.run([sys.executable, str(SCRIPT), "command-content", script],
+                         capture_output=True, text=True, check=True).stdout
+    assert json.loads(out)["source"]["text"] == script

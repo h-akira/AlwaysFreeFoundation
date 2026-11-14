@@ -7,9 +7,11 @@
 #
 #   plan     Upload terraform/ at HEAD and the variables, then run a plan job.
 #   apply    Apply exactly the latest plan job, if it was made from HEAD.
+#            For the main stack, then sends afp-bootstrap to the VM through
+#            Run Command (without waiting), so that the VM picks up afp.json.
 #   destroy  Destroy every resource of the main stack (the stack itself is kept).
-#            Asks to type the stack name, or needs AFP_CONFIRM_DESTROY=<name>.
-#            Refused for the base stack.
+#            Empties the bucket first, dumps included. Asks to type the stack
+#            name, or needs AFP_CONFIRM_DESTROY=<name>. Refused for the base stack.
 #   outputs  Print the stack's outputs as KEY=VALUE lines.
 #
 # Environment:
@@ -177,6 +179,28 @@ cmd_apply() {
   run_job create-apply-job --stack-id "$stack_id" --display-name "apply-$sha" \
     --execution-plan-strategy FROM_PLAN_JOB_ID --execution-plan-job-id "$plan_id"
   echo "Applied $sha. Commit the platform/ pointer in the config repository."
+  if [[ "$WORKDIR" == "main" ]]; then
+    # A new VM runs it by itself at boot; then this one only waits its turn.
+    "$ROOT/scripts/run-command.sh" send "sudo -n /usr/local/sbin/afp-bootstrap" \
+      || echo "stack.sh: warning: could not send afp-bootstrap to the VM" >&2
+  fi
+}
+
+# A bucket with objects cannot be deleted. afp.json is left to Terraform.
+empty_bucket() {
+  local bucket
+  bucket="$(stack_outputs "$1" | sed -n 's/^bucket=//p')"
+  if [[ -z "$bucket" ]]; then
+    echo "No bucket in the stack's outputs; nothing to empty."
+    return
+  fi
+  if ! oci_ os bucket get --bucket-name "$bucket" > /dev/null 2>&1; then
+    echo "Bucket $bucket not found; nothing to empty."
+    return
+  fi
+  echo "Emptying bucket $bucket ..."
+  oci_ os object bulk-delete --bucket-name "$bucket" --exclude afp.json --force > /dev/null \
+    || die "cannot empty bucket $bucket"
 }
 
 cmd_destroy() {
@@ -186,22 +210,28 @@ cmd_destroy() {
 
   if [[ "${AFP_CONFIRM_DESTROY:-}" != "$STACK_NAME" ]]; then
     [[ -t 0 ]] || die "not a terminal; set AFP_CONFIRM_DESTROY=$STACK_NAME to confirm"
+    echo "This deletes everything in the bucket too, DB dumps included."
     read -r -p "Destroy all resources of stack '$STACK_NAME'? Type the stack name: " answer
     [[ "$answer" == "$STACK_NAME" ]] || die "aborted"
   fi
 
+  empty_bucket "$stack_id"
   echo "Destroying ..."
   run_job create-destroy-job --stack-id "$stack_id" --display-name "destroy-$(head_sha)" \
     --execution-plan-strategy AUTO_APPROVED
   echo "Destroyed. The stack itself is kept; 'make plan' and 'make apply' recreate everything."
 }
 
+stack_outputs() {
+  oci_ resource-manager stack get-stack-tf-state --stack-id "$1" --file - \
+    | "${PY[@]}" outputs
+}
+
 cmd_outputs() {
   local stack_id
   stack_id="$(find_stack)"
   [[ -n "$stack_id" && "$stack_id" != "null" ]] || die "stack not found"
-  oci_ resource-manager stack get-stack-tf-state --stack-id "$stack_id" --file - \
-    | "${PY[@]}" outputs
+  stack_outputs "$stack_id"
 }
 
 case "${1:-}" in
