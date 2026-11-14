@@ -1,0 +1,11 @@
+#!/usr/bin/python3 -I
+# The platform's command on the VM (/opt/afp/current/bin/afp). See afp --help.
+# -I: ignore PYTHON* variables and the user's site-packages (run as root).
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from afp.cli import main  # noqa: E402
+
+sys.exit(main())

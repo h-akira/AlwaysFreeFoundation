@@ -7,7 +7,7 @@ export AFP_CONFIG_DIR
 
 PYTHON ?= $(ROOT)/env/bin/python
 
-.PHONY: help plan apply destroy outputs base-plan base-apply base-outputs db-tunnel ssh lint test env
+.PHONY: help plan apply destroy outputs base-plan base-apply base-outputs db-tunnel ssh lint test test39 env
 
 help: ## Show targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | sed 's/:.*## /\t/'
@@ -52,6 +52,10 @@ lint: ## Check formatting and validate terraform/; shellcheck if installed
 
 test: ## Run unit tests
 	$(PYTHON) -m pytest -q $(ROOT)/tests
+
+test39: ## Run unit tests on Python 3.9, the VM's python3 (needs Docker)
+	docker run --rm -v $(ROOT):/src:ro -w /src -e PYTHONDONTWRITEBYTECODE=1 python:3.9-slim \
+	  sh -c 'pip install -q --root-user-action=ignore pytest && python -m pytest -q -p no:cacheprovider tests'
 
 env: ## Create env/ with test dependencies
 	python3 -m venv $(ROOT)/env

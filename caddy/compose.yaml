@@ -1,0 +1,23 @@
+# The platform's entrance. Started by afp sync as project "afp-caddy":
+#   docker compose -p afp-caddy -f caddy/compose.yaml up -d
+# The Caddyfile is written by afp sync into /opt/afp/caddy/.
+services:
+  caddy:
+    image: caddy:2.11.9-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /opt/afp/caddy:/etc/caddy:ro
+      - data:/data
+      - config:/config
+    mem_limit: 128m
+    networks:
+      - afp
+volumes:
+  data:
+  config:
+networks:
+  afp:
+    external: true
