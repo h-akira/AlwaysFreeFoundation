@@ -90,7 +90,9 @@ class World:
                 name = args[args.index("--name") + 1]
                 if name in self.objects:
                     return 0, self.objects[name], ""
-                return 1, "", 'ServiceError: {"code": "ObjectNotFound", "status": 404}'
+                # What the real CLI prints (head_object first; code is null).
+                return 1, "", ('ServiceError:\n{\n    "code": null,\n    "message": "The service returned error code 404",\n'
+                               '    "operation_name": "head_object",\n    "status": 404,\n}')
             if "os object put" in line:
                 name = args[args.index("--name") + 1]
                 data = Path(args[args.index("--file") + 1]).read_bytes()

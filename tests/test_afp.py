@@ -219,7 +219,7 @@ def test_sync_secrets_never_reach_the_log(tmp_path: Path) -> None:
         f"answers = json.load(open({str(tmp_path / 'answers.json')!r}))\n"
         "args = ' '.join(sys.argv)\n"
         "if 'state/' in args:\n"
-        "    sys.exit('ServiceError: ObjectNotFound')\n"
+        "    sys.exit('ServiceError:\\n{\\n    \"code\": null,\\n    \"status\": 404,\\n}')\n"
         "print(next(v for k, v in answers.items() if k in args))\n"
     )
     (bin_dir / "docker").write_text(
@@ -330,3 +330,17 @@ def test_main_reports_a_failed_upload(tmp_path: Path, capsys: pytest.CaptureFixt
     assert cli.main(["sync"], paths=paths_in(tmp_path)) == 0
     assert "(upload failed: AfpError)" in capsys.readouterr().out
     assert list((tmp_path / "log").iterdir())
+
+
+def test_only_a_404_counts_as_missing(tmp_path: Path) -> None:
+    class Denied(World):
+        def _answer(self, args, env, stdout_path):  # type: ignore[no-untyped-def]
+            if "os object get" in " ".join(args) and "state/" in " ".join(args):
+                return 1, "", 'ServiceError:\n{\n    "code": "NotAuthorizedOrNotFound",\n    "status": 4040,\n}'
+            return super()._answer(args, env, stdout_path)
+
+    ctx = make_ctx(tmp_path, World())
+    assert ctx.oci is not None and ctx.oci.get_object_or_none("afp", "state/none.json") is None
+    ctx = make_ctx(tmp_path, Denied())
+    with pytest.raises(AfpError, match="cannot read state/x.json"):
+        ctx.oci.get_object_or_none("afp", "state/x.json")  # type: ignore[union-attr]

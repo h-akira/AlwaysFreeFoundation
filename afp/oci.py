@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import urllib.request
 from pathlib import Path
 
@@ -11,6 +12,9 @@ from afp.errors import AfpError
 from afp.runner import Runner
 
 METADATA = "http://169.254.169.254/opc/v2"
+# The CLI's error for a missing object: it tries head_object first and prints
+# "code": null with "status": 404 (measured 2026-11-14), not "ObjectNotFound".
+NOT_FOUND = re.compile(r'"status":\s*404\b')
 
 
 def metadata_region() -> str:
@@ -54,7 +58,7 @@ class Oci:
         )
         if result.returncode == 0:
             return result.stdout
-        if "ObjectNotFound" in result.stderr:
+        if NOT_FOUND.search(result.stderr):
             return None
         raise AfpError(f"cannot read {name} from bucket {bucket}: {result.stderr.strip()[-300:]}")
 
