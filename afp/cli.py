@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from afp import caddy, config, db
+from afp import project as projects_mod
 from afp.errors import AfpError
 from afp.lock import Lock
 from afp.log import Log, log_name, truncate
@@ -33,6 +34,10 @@ class Paths:
     caddy_dir: Path = Path("/opt/afp/caddy")
     run_dir: Path = Path("/run/afp")
     log_dir: Path = Path("/var/log/afp")
+    # Each project's compose.afp.yaml of the versions it ran (refetched every time).
+    projects_dir: Path = Path("/opt/afp/projects")
+    # DB dumps on their way to the bucket (on disk, not tmpfs).
+    work_dir: Path = Path("/var/tmp/afp")
 
 
 @dataclass
@@ -55,7 +60,7 @@ def load_config(ctx: Context) -> config.Config:
     return cfg
 
 
-def cmd_install(ctx: Context) -> str:
+def cmd_install(ctx: Context, args: argparse.Namespace) -> str:
     """The VM-wide pieces the projects and Caddy rely on. Idempotent."""
     if ctx.runner.run(["docker", "network", "inspect", NETWORK], check=False, quiet=True).returncode != 0:
         ctx.runner.run(["docker", "network", "create", NETWORK])
@@ -98,26 +103,87 @@ def sync_caddy(ctx: Context, cfg: config.Config) -> bool:
     return changed
 
 
-def cmd_sync(ctx: Context) -> str:
+def cmd_sync(ctx: Context, args: argparse.Namespace) -> str:
     """Bring the VM in line with afp.json."""
     cfg = load_config(ctx)
     with Lock(ctx.paths.run_dir / "lock", LOCK_TIMEOUT):
         sync_databases(ctx, cfg)
         changed = sync_caddy(ctx, cfg)
+        projects = projects_mod.Projects(ctx, cfg)
+        stopped = projects.stop_removed()
+        started = projects.start_stopped()
     names = ", ".join(p.name for p in cfg.projects) or "none"
-    return f"projects: {names}; Caddyfile {'updated' if changed else 'unchanged'}"
+    summary = f"projects: {names}; Caddyfile {'updated' if changed else 'unchanged'}"
+    if started:
+        summary += f"; started: {', '.join(started)}"
+    if stopped:
+        summary += f"; stopped: {', '.join(stopped)}"
+    return summary
+
+
+def cmd_deploy(ctx: Context, args: argparse.Namespace) -> str:
+    """Deploy TAG of PROJECT; on failure, go back to the version before."""
+    projects_mod.check_tag(args.tag)
+    cfg = load_config(ctx)
+    p = projects_mod.find(cfg, args.project)
+    with Lock(ctx.paths.run_dir / "lock", LOCK_TIMEOUT):
+        return projects_mod.Projects(ctx, cfg).deploy(p, args.tag)
+
+
+def cmd_rollback(ctx: Context, args: argparse.Namespace) -> str:
+    """Deploy PROJECT's previous version again (images and compose only, not the DB)."""
+    cfg = load_config(ctx)
+    p = projects_mod.find(cfg, args.project)
+    with Lock(ctx.paths.run_dir / "lock", LOCK_TIMEOUT):
+        return projects_mod.Projects(ctx, cfg).rollback(p)
+
+
+def cmd_backup(ctx: Context, args: argparse.Namespace) -> str:
+    """Dump PROJECT's database (every project's without PROJECT) to the bucket."""
+    cfg = load_config(ctx)
+    targets = [projects_mod.find(cfg, args.project)] if args.project else cfg.projects
+    with Lock(ctx.paths.run_dir / "lock", LOCK_TIMEOUT):
+        projects = projects_mod.Projects(ctx, cfg)
+        names = [projects.dump(p) for p in targets]
+    return "dumped: " + (", ".join(names) or "no projects")
 
 
 @dataclass(frozen=True)
 class Command:
-    run: Callable[[Context], str]
+    run: Callable[[Context, argparse.Namespace], str]
     help: str
     upload_log: bool
+    # (name, nargs) of positional arguments
+    arguments: tuple[tuple[str, Optional[str]], ...] = ()
 
 
 COMMANDS = {
     "install": Command(cmd_install, "set up the Docker network and directories (idempotent)", upload_log=False),
-    "sync": Command(cmd_sync, "create project DBs and users, write the Caddyfile and reload Caddy", upload_log=True),
+    "sync": Command(
+        cmd_sync,
+        "create project DBs and users, write the Caddyfile, reload Caddy, start projects that should run "
+        "and stop those no longer listed",
+        upload_log=True,
+    ),
+    "deploy": Command(
+        cmd_deploy,
+        "dump the DB, then run TAG of PROJECT (released by make deploy) and wait until healthy; "
+        "on failure go back to the version before",
+        upload_log=True,
+        arguments=(("project", None), ("tag", None)),
+    ),
+    "rollback": Command(
+        cmd_rollback,
+        "deploy the previous version of PROJECT again (the DB is not rolled back)",
+        upload_log=True,
+        arguments=(("project", None),),
+    ),
+    "backup": Command(
+        cmd_backup,
+        "dump the DB of PROJECT, or of every project, to the bucket",
+        upload_log=True,
+        arguments=(("project", "?"),),
+    ),
 }
 
 
@@ -126,11 +192,13 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
     sub.required = True
     for name, command in COMMANDS.items():
-        sub.add_parser(name, help=command.help, description=command.help)
+        cmd = sub.add_parser(name, help=command.help, description=command.help)
+        for arg, nargs in command.arguments:
+            cmd.add_argument(arg, nargs=nargs)
     return parser
 
 
-def finish(ctx: Context, name: str, object_name: str, upload: bool) -> str:
+def finish(ctx: Context, object_name: str, upload: bool) -> str:
     """Upload the log to the bucket; tell where it is."""
     ctx.log.close()
     if not upload or ctx.oci is None or ctx.oci.namespace is None:
@@ -152,19 +220,19 @@ def main(argv: list[str] | None = None, paths: Paths | None = None) -> int:
             return 2
         paths = Paths(code=Path(__file__).resolve().parents[1])
     command = COMMANDS[args.command]
-    object_name = log_name(args.command)
+    object_name = log_name(args.command, getattr(args, "project", None))
     log = Log(paths.log_dir / Path(object_name).name)
     ctx = Context(paths=paths, log=log, runner=Runner(log), oci=None)
     code = 0
     try:
-        result = f"OK: {command.run(ctx)}"
+        result = f"OK: {command.run(ctx, args)}"
     except AfpError as e:
         log.info(f"error: {e}")
         result, code = f"FAILED: {e}", 1
     except Exception as e:  # keep the summary short; the traceback goes to the log
         log.detail(traceback.format_exc())
         result, code = f"FAILED: unexpected {type(e).__name__}: {e}", 1
-    where = finish(ctx, args.command, object_name, command.upload_log)
+    where = finish(ctx, object_name, command.upload_log)
     # The summary is printed last; make keeps only the end of the output.
     print(f"afp {args.command}: {truncate(result)}\nlog: {where}")
     return code

@@ -7,7 +7,7 @@ export AFP_CONFIG_DIR
 
 PYTHON ?= $(ROOT)/env/bin/python
 
-.PHONY: help plan apply destroy outputs base-plan base-apply base-outputs db-tunnel ssh platform command-result lint test test39 env
+.PHONY: help plan apply destroy outputs base-plan base-apply base-outputs db-tunnel ssh platform command-result deploy rollback backup lint test test39 env
 
 help: ## Show targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | sed 's/:.*## /\t/'
@@ -44,6 +44,23 @@ command-result: ## Wait for a Run Command sent by make (ID=<command OCID>) and s
 	@[ -n "$$AFP_COMMAND_ID" ] || { echo "usage: make command-result ID=<command OCID>" >&2; exit 2; }
 	@$(ROOT)/scripts/run-command.sh result "$$AFP_COMMAND_ID" --wait
 
+# PROJECT and DIR, like CMD, go through the environment unexpanded.
+deploy: export AFP_PROJECT_NAME = $(value PROJECT)
+deploy: export AFP_PROJECT_DIR = $(value DIR)
+deploy: ## Build the tagged HEAD of DIR for the VM, push it and deploy it as PROJECT (waits)
+	@[ -n "$$AFP_PROJECT_NAME" ] && [ -n "$$AFP_PROJECT_DIR" ] || { echo "usage: make deploy PROJECT=<name> DIR=<repository>" >&2; exit 2; }
+	@$(ROOT)/scripts/project.sh deploy "$$AFP_PROJECT_NAME" "$$AFP_PROJECT_DIR"
+
+rollback: export AFP_PROJECT_NAME = $(value PROJECT)
+rollback: ## Deploy the previous version of PROJECT again (images and compose; not the DB)
+	@[ -n "$$AFP_PROJECT_NAME" ] || { echo "usage: make rollback PROJECT=<name>" >&2; exit 2; }
+	@$(ROOT)/scripts/project.sh rollback "$$AFP_PROJECT_NAME"
+
+backup: export AFP_PROJECT_NAME = $(value PROJECT)
+backup: ## Dump the DB of PROJECT (or of every project without PROJECT) to the bucket (waits)
+	@if [ -n "$$AFP_PROJECT_NAME" ]; then $(ROOT)/scripts/project.sh backup "$$AFP_PROJECT_NAME"; \
+	else $(ROOT)/scripts/project.sh backup; fi
+
 db-tunnel: ## Open a Bastion tunnel to the DB (foreground; Ctrl-C to close)
 	@$(ROOT)/scripts/db-tunnel.sh
 
@@ -66,7 +83,7 @@ test: ## Run unit tests
 
 test39: ## Run the tests of afp on Python 3.9, the VM's python3 (needs Docker)
 	docker run --rm -v $(ROOT):/src:ro -w /src -e PYTHONDONTWRITEBYTECODE=1 python:3.9-slim \
-	  sh -c 'pip install -q --root-user-action=ignore pytest && python -m pytest -q -p no:cacheprovider tests/test_afp.py'
+	  sh -c 'pip install -q --root-user-action=ignore pytest && python -m pytest -q -p no:cacheprovider tests/test_afp.py tests/test_afp_project.py'
 
 env: ## Create env/ with test dependencies
 	python3 -m venv $(ROOT)/env

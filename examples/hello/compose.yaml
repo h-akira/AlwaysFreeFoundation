@@ -1,0 +1,31 @@
+# Local development: the same image with a MySQL like the platform's
+# (mysql/VERSION and mysql/heatwave.cnf of the platform repository).
+#   docker compose up --build    then open http://localhost:8080/
+services:
+  web:
+    build: .
+    environment:
+      AFP_DB_HOST: db
+      AFP_DB_PORT: "3306"
+      AFP_DB_NAME: hello
+      AFP_DB_USER: hello
+      AFP_DB_PASSWORD: Local-dev_1
+      HELLO_VERSION: local
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: mysql:26.10.0 # keep in step with mysql/VERSION
+    environment:
+      MYSQL_ROOT_PASSWORD: Local-root_1
+      MYSQL_DATABASE: hello
+      MYSQL_USER: hello
+      MYSQL_PASSWORD: Local-dev_1
+    volumes:
+      - ../../mysql/heatwave.cnf:/etc/mysql/conf.d/heatwave.cnf:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pLocal-root_1"]
+      interval: 5s
+      retries: 20

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import urllib.request
 from pathlib import Path
 
@@ -45,6 +46,18 @@ class Oci:
             raise AfpError(f"cannot read {name} from bucket {bucket}: {result.stderr.strip()[-300:]}")
         return result.stdout
 
+    def get_object_or_none(self, bucket: str, name: str) -> str | None:
+        """Like get_object, but None when the object does not exist."""
+        result = self.runner.run(
+            self._cmd("os", "object", "get", *self._ns(), "-bn", bucket, "--name", name, "--file", "-"),
+            check=False,
+        )
+        if result.returncode == 0:
+            return result.stdout
+        if "ObjectNotFound" in result.stderr:
+            return None
+        raise AfpError(f"cannot read {name} from bucket {bucket}: {result.stderr.strip()[-300:]}")
+
     def put_object(self, bucket: str, name: str, path: Path, content_type: str, quiet: bool = False) -> None:
         self.runner.run(
             self._cmd(
@@ -67,3 +80,17 @@ class Oci:
             return base64.b64decode(result.stdout.strip(), validate=True).decode()
         except ValueError as e:
             raise AfpError(f"secret {secret_id} is not base64 text") from e
+
+    def registry_token(self, registry: str) -> str:
+        """Short-lived (1 hour) OCIR token for docker login -u BEARER_TOKEN."""
+        result = self.runner.run(
+            self._cmd("raw-request", "--http-method", "GET", "--target-uri", f"https://{registry}/20180419/docker/token"),
+            secret_output=True,
+        )
+        try:
+            token = json.loads(result.stdout)["data"]["token"]
+        except (ValueError, KeyError, TypeError) as e:
+            raise AfpError(f"no token in the answer of {registry}") from e
+        if not isinstance(token, str) or not token:
+            raise AfpError(f"no token in the answer of {registry}")
+        return token

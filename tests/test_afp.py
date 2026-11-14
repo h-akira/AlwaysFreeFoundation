@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import base64
-import io
+import argparse
 import json
-import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -19,29 +17,10 @@ sys.path.insert(0, str(ROOT))
 from afp import caddy, cli, config, db  # noqa: E402
 from afp.errors import AfpError  # noqa: E402
 from afp.lock import Lock  # noqa: E402
-from afp.log import Log, truncate  # noqa: E402
+from afp.log import truncate  # noqa: E402
 from afp.oci import Oci  # noqa: E402
 
-DB_PASSWORD = "Ab3-xyz_DEF.ghi~jkl"
-ADMIN_PASSWORD = "Admin-Pass_1"
-
-
-def afp_json(projects: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    return {
-        "region": "us-ashburn-1",
-        "namespace": "ns",
-        "bucket": "afp",
-        "platform_repository": "https://github.com/example/platform",
-        "db": {"host": "10.0.1.10", "port": 3306, "admin_user": "afpadmin", "admin_secret_id": "ocid1.vaultsecret.oc1..admin"},
-        "image_prefix_base": "iad.ocir.io/ns/afp",
-        "projects": projects
-        if projects is not None
-        else [
-            {"name": "hello", "domain": "hello.example.com", "secret_id": "ocid1.vaultsecret.oc1..hello", "manual_secret_ids": {}},
-            {"name": "app-a", "domain": "app-a.example.net", "secret_id": "ocid1.vaultsecret.oc1..appa",
-             "manual_secret_ids": {"API_KEY": "ocid1.vaultsecret.oc1..apikey"}},
-        ],
-    }
+from afp_world import ADMIN_PASSWORD, DB_PASSWORD, afp_json  # noqa: E402
 
 
 # --- config ---------------------------------------------------------------
@@ -179,60 +158,24 @@ def test_lock_times_out_while_held(tmp_path: Path) -> None:
         pass
 
 
-# --- commands with a fake runner -----------------------------------------
+# --- commands on a fake VM (tests/afp_world.py) --------------------------
 
+from afp_world import World, b64, make_ctx  # noqa: E402
 
-class FakeRunner:
-    """Answers commands by their leading words; records everything."""
-
-    def __init__(self, answers: dict[tuple[str, ...], tuple[int, str]] | None = None) -> None:
-        self.calls: list[dict[str, Any]] = []
-        self.answers = answers or {}
-
-    def run(self, args: list[str], *, stdin: str | None = None, env: dict[str, str] | None = None,
-            check: bool = True, quiet: bool = False, secret_output: bool = False) -> subprocess.CompletedProcess[str]:
-        self.calls.append({"args": list(args), "stdin": stdin, "env": env, "secret_output": secret_output})
-        code, out = 0, ""
-        for prefix, answer in self.answers.items():
-            if tuple(args[: len(prefix)]) == prefix:
-                code, out = answer
-        if check and code != 0:
-            raise AfpError(f"{args[0]} failed")
-        return subprocess.CompletedProcess(args, code, out, "")
-
-
-def b64(text: str) -> str:
-    return base64.b64encode(text.encode()).decode()
-
-
-def fake_oci_answers(afp: dict[str, Any]) -> dict[tuple[str, ...], tuple[int, str]]:
-    base = ("oci", "--auth", "instance_principal", "--region", "us-ashburn-1")
-    secret = (*base, "secrets", "secret-bundle", "get", "--secret-id")
-    return {
-        (*base, "os", "object", "get"): (0, json.dumps(afp)),
-        (*secret, "ocid1.vaultsecret.oc1..admin"): (0, b64(ADMIN_PASSWORD)),
-        (*secret, "ocid1.vaultsecret.oc1..hello"): (0, b64(json.dumps({"AFP_DB_PASSWORD": DB_PASSWORD}))),
-        (*secret, "ocid1.vaultsecret.oc1..appa"): (0, b64(json.dumps({"AFP_DB_PASSWORD": DB_PASSWORD, "SIGNING_KEY": "k"}))),
-    }
-
-
-def make_ctx(tmp_path: Path, runner: FakeRunner) -> cli.Context:
-    paths = cli.Paths(code=ROOT, caddy_dir=tmp_path / "caddy", run_dir=tmp_path / "run", log_dir=tmp_path / "log")
-    log = Log(paths.log_dir / "test.log", echo=io.StringIO())
-    return cli.Context(paths=paths, log=log, runner=runner, oci=Oci(runner, "us-ashburn-1"))  # type: ignore[arg-type]
+NO_ARGS = argparse.Namespace()
 
 
 def test_sync(tmp_path: Path) -> None:
-    runner = FakeRunner(fake_oci_answers(afp_json()))
-    ctx = make_ctx(tmp_path, runner)
-    summary = cli.cmd_sync(ctx)
+    world = World()
+    ctx = make_ctx(tmp_path, world)
+    summary = cli.cmd_sync(ctx, NO_ARGS)
     assert summary == "projects: hello, app-a; Caddyfile updated"
     assert ctx.oci is not None and ctx.oci.namespace == "ns"
 
-    secret_calls = [c for c in runner.calls if "secret-bundle" in c["args"]]
+    secret_calls = [c for c in world.calls if "secret-bundle" in c["args"]]
     assert secret_calls and all(c["secret_output"] for c in secret_calls)
 
-    [mysql] = [c for c in runner.calls if c["args"][:2] == ["docker", "run"]]
+    [mysql] = [c for c in world.calls if c["args"][:2] == ["docker", "run"]]
     assert "mysql:" + (ROOT / "mysql" / "VERSION").read_text().strip() in mysql["args"]
     assert ["-h", "10.0.1.10", "-P", "3306", "-u", "afpadmin"] == mysql["args"][-7:-1]
     # Passwords only in the environment and stdin, never in the arguments.
@@ -241,22 +184,21 @@ def test_sync(tmp_path: Path) -> None:
     assert "`hello`" in mysql["stdin"] and "`app_a`" in mysql["stdin"]
 
     assert (tmp_path / "caddy" / "Caddyfile").read_text() == caddy.render(config.parse(json.dumps(afp_json())).projects)
-    docker = [c["args"] for c in runner.calls if c["args"][:2] == ["docker", "compose"]]
-    assert docker[0][2:4] == ["-p", "afp-caddy"]
+    docker = [c["args"] for c in world.calls if c["args"][:4] == ["docker", "compose", "-p", "afp-caddy"]]
     assert docker[0][-3:] == ["up", "-d", "--remove-orphans"]
     assert docker[1][6:11] == ["exec", "-T", "caddy", "caddy", "reload"]
 
     # Second run: same file, still reloaded (a failed reload is retried).
-    runner.calls.clear()
-    assert cli.cmd_sync(ctx).endswith("Caddyfile unchanged")
-    assert any("reload" in c["args"] for c in runner.calls)
+    world.calls.clear()
+    assert cli.cmd_sync(ctx, NO_ARGS).endswith("Caddyfile unchanged")
+    assert any("reload" in c["args"] for c in world.calls)
 
 
 def test_sync_without_projects_skips_the_db(tmp_path: Path) -> None:
-    runner = FakeRunner(fake_oci_answers(afp_json([])))
-    cli.cmd_sync(make_ctx(tmp_path, runner))
-    assert not any("secret-bundle" in c["args"] for c in runner.calls)
-    assert not any(c["args"][:2] == ["docker", "run"] for c in runner.calls)
+    world = World(afp_json([]))
+    cli.cmd_sync(make_ctx(tmp_path, world), NO_ARGS)
+    assert not any("secret-bundle" in c["args"] for c in world.calls)
+    assert not any(c["args"][:2] == ["docker", "run"] for c in world.calls)
 
 
 def test_sync_secrets_never_reach_the_log(tmp_path: Path) -> None:
@@ -276,18 +218,22 @@ def test_sync_secrets_never_reach_the_log(tmp_path: Path) -> None:
         f"#!{sys.executable}\nimport json, sys\n"
         f"answers = json.load(open({str(tmp_path / 'answers.json')!r}))\n"
         "args = ' '.join(sys.argv)\n"
+        "if 'state/' in args:\n"
+        "    sys.exit('ServiceError: ObjectNotFound')\n"
         "print(next(v for k, v in answers.items() if k in args))\n"
     )
-    (bin_dir / "docker").write_text("#!/bin/sh\ncat > /dev/null\necho docker ok\n")
+    (bin_dir / "docker").write_text(
+        '#!/bin/sh\ncat > /dev/null\ncase "$*" in *" ls "*) echo "[]" ;; *) echo docker ok ;; esac\n'
+    )
     for f in bin_dir.iterdir():
         f.chmod(0o755)
     monkey = pytest.MonkeyPatch()
     monkey.setenv("PATH", f"{bin_dir}:/usr/bin:/bin")
     try:
-        ctx = make_ctx(tmp_path, None)  # type: ignore[arg-type]
+        ctx = make_ctx(tmp_path, None)
         ctx.runner = Runner(ctx.log)
         ctx.oci = Oci(ctx.runner, "us-ashburn-1")
-        cli.cmd_sync(ctx)
+        cli.cmd_sync(ctx, NO_ARGS)
     finally:
         monkey.undo()
     ctx.log.close()
@@ -297,29 +243,48 @@ def test_sync_secrets_never_reach_the_log(tmp_path: Path) -> None:
         assert value not in text
 
 
+class NetworkMissing(World):
+    def _answer(self, args, env, stdout_path):  # type: ignore[no-untyped-def]
+        if args[:3] == ["docker", "network", "inspect"]:
+            return 1, "", "no such network"
+        return super()._answer(args, env, stdout_path)
+
+
 def test_install_creates_the_network_once(tmp_path: Path) -> None:
-    runner = FakeRunner({("docker", "network", "inspect"): (1, "")})
-    cli.cmd_install(make_ctx(tmp_path, runner))
-    assert ["docker", "network", "create", "afp"] in [c["args"] for c in runner.calls]
-    runner = FakeRunner()
-    cli.cmd_install(make_ctx(tmp_path, runner))
-    assert not any(c["args"][:3] == ["docker", "network", "create"] for c in runner.calls)
+    world = NetworkMissing()
+    cli.cmd_install(make_ctx(tmp_path, world), NO_ARGS)
+    assert ["docker", "network", "create", "afp"] in [c["args"] for c in world.calls]
+    world = World()
+    cli.cmd_install(make_ctx(tmp_path, world), NO_ARGS)
+    assert not any(c["args"][:3] == ["docker", "network", "create"] for c in world.calls)
     assert (tmp_path / "caddy").is_dir()
 
 
+def paths_in(tmp_path: Path) -> cli.Paths:
+    return cli.Paths(code=ROOT, caddy_dir=tmp_path / "caddy", run_dir=tmp_path / "run", log_dir=tmp_path / "log",
+                     projects_dir=tmp_path / "projects", work_dir=tmp_path / "work")
+
+
 def test_main_prints_a_short_summary_last(tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
-    def boom(ctx: cli.Context) -> str:
+    def boom(ctx: cli.Context, args: argparse.Namespace) -> str:
         raise AfpError("x" * 5000)
 
     monkeypatch.setitem(cli.COMMANDS, "sync", cli.Command(boom, "h", upload_log=True))
-    paths = cli.Paths(code=ROOT, caddy_dir=tmp_path / "caddy", run_dir=tmp_path / "run", log_dir=tmp_path / "log")
-    assert cli.main(["sync"], paths=paths) == 1
+    assert cli.main(["sync"], paths=paths_in(tmp_path)) == 1
     out = capsys.readouterr().out
     assert out.startswith("afp sync: FAILED: xxx")
     assert len(out.encode()) <= 1024
     assert out.splitlines()[-1].startswith("log: ")
     # No OCI client was made, so the log stays on the VM.
     assert list((tmp_path / "log").iterdir())
+
+
+def test_main_names_the_log_after_the_project(tmp_path: Path, capsys: pytest.CaptureFixture[str],
+                                              monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(cli.COMMANDS, "backup", cli.Command(lambda ctx, args: "ok", "h", upload_log=False,
+                                                            arguments=(("project", "?"),)))
+    assert cli.main(["backup", "hello"], paths=paths_in(tmp_path)) == 0
+    assert capsys.readouterr().out.splitlines()[-1].endswith("-backup-hello.log")
 
 
 def test_bucket_name_matches_terraform() -> None:
@@ -336,14 +301,13 @@ def test_main_uploads_the_log_with_the_real_runner(tmp_path: Path, capsys: pytes
     (bin_dir / "oci").chmod(0o755)
     monkeypatch.setenv("PATH", f"{bin_dir}:/usr/bin:/bin")
 
-    def work(ctx: cli.Context) -> str:
+    def work(ctx: cli.Context, args: argparse.Namespace) -> str:
         ctx.oci = Oci(ctx.runner, "us-ashburn-1", namespace="ns")
         ctx.runner.run(["oci", "something"])
         return "done"
 
     monkeypatch.setitem(cli.COMMANDS, "sync", cli.Command(work, "h", upload_log=True))
-    paths = cli.Paths(code=ROOT, caddy_dir=tmp_path / "caddy", run_dir=tmp_path / "run", log_dir=tmp_path / "log")
-    assert cli.main(["sync"], paths=paths) == 0
+    assert cli.main(["sync"], paths=paths_in(tmp_path)) == 0
     out = capsys.readouterr().out
     assert out.startswith("afp sync: OK: done\nlog: bucket afp: logs/")
     assert "os object put -ns ns -bn afp --name logs/" in (tmp_path / "oci.log").read_text()
@@ -358,12 +322,11 @@ def test_main_reports_a_failed_upload(tmp_path: Path, capsys: pytest.CaptureFixt
     (bin_dir / "oci").chmod(0o755)
     monkeypatch.setenv("PATH", f"{bin_dir}:/usr/bin:/bin")
 
-    def work(ctx: cli.Context) -> str:
+    def work(ctx: cli.Context, args: argparse.Namespace) -> str:
         ctx.oci = Oci(ctx.runner, "us-ashburn-1", namespace="ns")
         return "done"
 
     monkeypatch.setitem(cli.COMMANDS, "sync", cli.Command(work, "h", upload_log=True))
-    paths = cli.Paths(code=ROOT, caddy_dir=tmp_path / "caddy", run_dir=tmp_path / "run", log_dir=tmp_path / "log")
-    assert cli.main(["sync"], paths=paths) == 0
+    assert cli.main(["sync"], paths=paths_in(tmp_path)) == 0
     assert "(upload failed: AfpError)" in capsys.readouterr().out
     assert list((tmp_path / "log").iterdir())

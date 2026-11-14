@@ -1,0 +1,27 @@
+# What the platform runs (docs/04_using.md §2). Values come from the platform
+# at deploy time (§3); nothing environment-specific is written here.
+services:
+  web:
+    build: .
+    image: ${AFP_IMAGE_PREFIX}/web:${AFP_TAG}
+    environment:
+      AFP_DB_HOST: ${AFP_DB_HOST}
+      AFP_DB_PORT: ${AFP_DB_PORT}
+      AFP_DB_NAME: ${AFP_DB_NAME}
+      AFP_DB_USER: ${AFP_DB_USER}
+      AFP_DB_PASSWORD: ${AFP_DB_PASSWORD}
+      HELLO_VERSION: ${AFP_TAG}
+    healthcheck:
+      # The slim image has no wget or curl.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    mem_limit: 128m
+    networks:
+      afp:
+        aliases: ["${AFP_PROJECT}"]
+networks:
+  afp:
+    external: true

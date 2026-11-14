@@ -14,6 +14,11 @@ Subcommands:
                              "STATE EXIT_CODE" and then the output text.
   command-content SCRIPT     Print the --content of a Run Command for SCRIPT
                              (wrapped to return only the end of its output).
+  build-services PREFIX      Read `docker compose config --format json` from
+                             stdin; print "SERVICE REPOSITORY" for each service
+                             with build:, whose image must be PREFIX/<name>:<tag>.
+  json-get KEY               Print one top-level value of the JSON on stdin.
+  has-project NAME           Read afp.json on stdin; fail unless NAME is listed.
 """
 
 from __future__ import annotations
@@ -83,6 +88,28 @@ def command_content(script: str) -> dict[str, Any]:
     return {"source": {"sourceType": "TEXT", "text": wrap_script(script)}, "output": {"outputType": "TEXT"}}
 
 
+def build_services(config: dict[str, Any], prefix: str) -> list[tuple[str, str]]:
+    """Services that make deploy builds, with their OCIR repository names.
+
+    prefix is AFP_IMAGE_PREFIX, e.g. nrt.ocir.io/<namespace>/afp/<project>;
+    the repository is the image path after the namespace, without the tag
+    (afp/<project>/<name>).
+    """
+    result: list[tuple[str, str]] = []
+    for name, service in sorted((config.get("services") or {}).items()):
+        if "build" not in service:
+            continue
+        image = service.get("image") or ""
+        path, _, tag = image.rpartition(":")
+        if not image.startswith(prefix + "/") or not tag or "/" in tag:
+            raise ValueError(f"service {name}: image must be ${{AFP_IMAGE_PREFIX}}/<name>:${{AFP_TAG}}, not {image!r}")
+        repository = path.split("/", 2)[2]  # drop the registry host and the namespace
+        result.append((name, repository))
+    if not result:
+        raise ValueError("no service has build:; nothing to build")
+    return result
+
+
 def _load_json(path: str) -> dict[str, Any]:
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
@@ -109,6 +136,20 @@ def main(argv: list[str]) -> int:
         print(text, end="" if text.endswith("\n") or not text else "\n")
     elif len(argv) == 2 and argv[0] == "command-content":
         print(json.dumps(command_content(argv[1])))
+    elif len(argv) == 2 and argv[0] == "build-services":
+        for name, repository in build_services(json.load(sys.stdin), argv[1]):
+            print(f"{name} {repository}")
+    elif len(argv) == 2 and argv[0] == "json-get":
+        value = json.load(sys.stdin).get(argv[1])
+        if value is None:
+            print(f"{argv[1]} is not set", file=sys.stderr)
+            return 1
+        print(value if isinstance(value, str) else json.dumps(value))
+    elif len(argv) == 2 and argv[0] == "has-project":
+        names = [p.get("name") for p in json.load(sys.stdin).get("projects") or []]
+        if argv[1] not in names:
+            print(f"project {argv[1]} is not in afp.json (listed: {', '.join(names) or 'none'})", file=sys.stderr)
+            return 1
     elif len(argv) == 1 and argv[0] == "outputs":
         for key, value in state_outputs(json.load(sys.stdin)).items():
             print(f"{key}={value}")

@@ -116,3 +116,26 @@ def test_command_content_keeps_the_end_and_the_exit_code() -> None:
 def test_wrapped_script_passes_success() -> None:
     result = subprocess.run(["sh", "-c", rm_values.wrap_script("echo ok >&2")], capture_output=True, text=True)
     assert (result.returncode, result.stdout) == (0, "ok\n")
+
+
+PREFIX = "nrt.ocir.io/ns/afp/hello"
+
+
+def test_build_services_takes_only_built_ones() -> None:
+    config = {"services": {
+        "web": {"build": {"context": "."}, "image": f"{PREFIX}/web:v1"},
+        "worker": {"build": {"context": "."}, "image": f"{PREFIX}/worker:v1"},
+        "redis": {"image": "redis:7"},
+    }}
+    assert rm_values.build_services(config, PREFIX) == [("web", "afp/hello/web"), ("worker", "afp/hello/worker")]
+
+
+@pytest.mark.parametrize("image", ["", "web:v1", f"{PREFIX}/web", "nrt.ocir.io/ns/afp/other/web:v1"])
+def test_build_services_refuses_other_images(image: str) -> None:
+    with pytest.raises(ValueError):
+        rm_values.build_services({"services": {"web": {"build": {}, "image": image}}}, PREFIX)
+
+
+def test_build_services_needs_one() -> None:
+    with pytest.raises(ValueError, match="nothing to build"):
+        rm_values.build_services({"services": {"redis": {"image": "redis:7"}}}, PREFIX)

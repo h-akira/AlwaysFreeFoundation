@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import os
 import subprocess
-from typing import Mapping, Sequence
+from pathlib import Path
+from typing import IO, Mapping, Optional, Sequence
 
 from afp.errors import AfpError
 from afp.log import Log
@@ -29,12 +30,14 @@ class Runner:
         check: bool = True,
         quiet: bool = False,
         secret_output: bool = False,
+        stdout_path: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
         """Run a command and capture its output.
 
         env adds variables to the inherited environment. quiet keeps the
         command line and its output out of the log; secret_output keeps only
-        stdout out of it (e.g. a secret's value).
+        stdout out of it (e.g. a secret's value). stdout_path writes stdout to
+        that file instead of capturing it (e.g. a DB dump).
         """
         if not quiet:
             self.log.info("$ " + " ".join(args))
@@ -42,9 +45,17 @@ class Runner:
         if env:
             full_env = dict(os.environ)
             full_env.update(env)
-        result = subprocess.run(
-            list(args), input=stdin, env=full_env, capture_output=True, text=True, check=False
-        )
+        out: Optional[IO[str]] = open(stdout_path, "w") if stdout_path is not None else None
+        try:
+            result = subprocess.run(
+                list(args), input=stdin, env=full_env, text=True, check=False,
+                stdout=out if out is not None else subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+        finally:
+            if out is not None:
+                out.close()
+        if result.stdout is None:
+            result.stdout = ""
         if not quiet:
             if not secret_output:
                 self.log.detail(result.stdout)
