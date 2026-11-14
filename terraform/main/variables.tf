@@ -103,3 +103,60 @@ variable "vm_generation" {
   type        = number
   default     = 1
 }
+
+variable "projects" {
+  description = <<-EOT
+    Projects hosted on the platform (docs/04_using.md §1). Each item:
+      name        lower-case letters, digits and hyphens; not "caddy", not starting with "afp".
+                  The DB and its user are named after it with "-" replaced by "_".
+      repository  GitHub repository of the project.
+      domain      Domain name served by Caddy for the project.
+      vm          VM to run on; only "main" for now.
+      secrets     [{name, how}]: name in upper case (not AFP_*), how is "generate" or "manual".
+  EOT
+  type = list(object({
+    name       = string
+    repository = string
+    domain     = string
+    vm         = string
+    secrets = optional(list(object({
+      name = string
+      how  = string
+    })), [])
+  }))
+  default = []
+
+  validation {
+    condition = alltrue([for p in var.projects :
+      can(regex("^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$", p.name)) && !startswith(p.name, "afp") && p.name != "caddy"
+    ])
+    error_message = "projects[*].name: 1-32 lower-case letters, digits and hyphens (not at either end); \"caddy\" and names starting with \"afp\" are reserved."
+  }
+
+  validation {
+    condition     = length(distinct([for p in var.projects : replace(p.name, "-", "_")])) == length(var.projects)
+    error_message = "projects[*].name must be unique, also after replacing \"-\" with \"_\" (the DB name)."
+  }
+
+  validation {
+    condition     = length(distinct([for p in var.projects : lower(p.domain)])) == length(var.projects) && alltrue([for p in var.projects : can(regex("^([a-z0-9]([a-z0-9-]*[a-z0-9])?\\.)+[a-z]{2,}$", lower(p.domain)))])
+    error_message = "projects[*].domain must be a valid domain name, unique among the projects."
+  }
+
+  validation {
+    condition     = alltrue([for p in var.projects : p.vm == "main"])
+    error_message = "projects[*].vm must be \"main\" (the only VM)."
+  }
+
+  validation {
+    condition = alltrue(flatten([for p in var.projects : [for s in p.secrets :
+      can(regex("^[A-Z][A-Z0-9_]*$", s.name)) && !startswith(s.name, "AFP_") && contains(["generate", "manual"], s.how)
+    ]]))
+    error_message = "projects[*].secrets: name must be upper-case letters, digits and \"_\", start with a letter and not start with AFP_; how must be \"generate\" or \"manual\"."
+  }
+
+  validation {
+    condition     = alltrue([for p in var.projects : length(distinct([for s in p.secrets : s.name])) == length(p.secrets)])
+    error_message = "projects[*].secrets: names must be unique within a project."
+  }
+}

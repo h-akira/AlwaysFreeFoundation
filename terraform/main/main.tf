@@ -70,6 +70,7 @@ module "secrets" {
   compartment_id = local.compartment_id
   vault_id       = data.oci_kms_vaults.afp.vaults[0].id
   key_id         = data.oci_kms_keys.afp.keys[0].id
+  projects       = [for p in var.projects : { name = p.name, secrets = p.secrets }]
 }
 
 module "network" {
@@ -120,6 +121,12 @@ module "storage" {
       admin_secret_id = module.secrets.db_admin_secret_id
     }
     image_prefix_base = "${lower(data.oci_identity_regions.this.regions[0].key)}.ocir.io/${data.oci_objectstorage_namespace.this.namespace}/afp"
+    projects = [for p in var.projects : {
+      name              = p.name
+      domain            = lower(p.domain)
+      secret_id         = module.secrets.project_secrets[p.name].secret_id
+      manual_secret_ids = module.secrets.project_secrets[p.name].manual_secret_ids
+    }]
   }
 }
 
