@@ -136,9 +136,10 @@ def finish(ctx: Context, name: str, object_name: str, upload: bool) -> str:
     if not upload or ctx.oci is None or ctx.oci.namespace is None:
         return str(ctx.log.path)
     try:
-        ctx.oci.put_object(config.BUCKET, object_name, ctx.log.path, "text/plain")
-    except AfpError:
-        return f"{ctx.log.path} (upload failed)"
+        # quiet: the log is closed, and the upload must not write into it.
+        ctx.oci.put_object(config.BUCKET, object_name, ctx.log.path, "text/plain", quiet=True)
+    except Exception as e:  # the command itself is over; only report it
+        return f"{ctx.log.path} (upload failed: {type(e).__name__})"
     ctx.log.path.unlink()
     return f"bucket {config.BUCKET}: {object_name}"
 
@@ -164,6 +165,6 @@ def main(argv: list[str] | None = None, paths: Paths | None = None) -> int:
         log.detail(traceback.format_exc())
         result, code = f"FAILED: unexpected {type(e).__name__}: {e}", 1
     where = finish(ctx, args.command, object_name, command.upload_log)
-    # The summary is printed last: Run Command keeps only the last 1 KB.
+    # The summary is printed last; make keeps only the end of the output.
     print(f"afp {args.command}: {truncate(result)}\nlog: {where}")
     return code

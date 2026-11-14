@@ -102,8 +102,17 @@ def test_execution_result() -> None:
     assert rm_values.execution_result(waiting) == ("ACCEPTED", "-", "")
 
 
-def test_command_content_keeps_the_script_intact() -> None:
-    script = "sudo -n /usr/local/sbin/afp-bootstrap; echo \"$HOME\" 'x'"
+def test_command_content_keeps_the_end_and_the_exit_code() -> None:
+    script = "seq 1 2000; echo \"done $((1+1))\" 'x'; exit 3"
     out = subprocess.run([sys.executable, str(SCRIPT), "command-content", script],
                          capture_output=True, text=True, check=True).stdout
-    assert json.loads(out)["source"]["text"] == script
+    text = json.loads(out)["source"]["text"]
+    result = subprocess.run(["sh", "-c", text], capture_output=True, text=True)
+    assert result.returncode == 3
+    assert result.stdout.endswith("2000\ndone 2 x\n")
+    assert len(result.stdout.encode()) <= rm_values.OUTPUT_TAIL_BYTES
+
+
+def test_wrapped_script_passes_success() -> None:
+    result = subprocess.run(["sh", "-c", rm_values.wrap_script("echo ok >&2")], capture_output=True, text=True)
+    assert (result.returncode, result.stdout) == (0, "ok\n")

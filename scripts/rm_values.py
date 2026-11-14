@@ -12,7 +12,8 @@ Subcommands:
   execution                  Read a Run Command execution (oci instance-agent
                              command-execution get) from stdin; print
                              "STATE EXIT_CODE" and then the output text.
-  command-content SCRIPT     Print the --content of a Run Command for SCRIPT.
+  command-content SCRIPT     Print the --content of a Run Command for SCRIPT
+                             (wrapped to return only the end of its output).
 """
 
 from __future__ import annotations
@@ -63,8 +64,23 @@ def execution_result(execution: dict[str, Any]) -> tuple[str, str, str]:
     return str(data.get("lifecycle-state")), "-" if code is None else str(code), content.get("text") or ""
 
 
+# Run Command returns about 1 KB of the output, cut at its start (measured
+# 2026-11-14, although the documentation says the last 1 KB). The script is
+# wrapped so that only its end, where afp prints its summary, comes back.
+OUTPUT_TAIL_BYTES = 900
+
+
+def wrap_script(script: str) -> str:
+    """POSIX sh: run SCRIPT, print the end of its output, keep its exit code."""
+    return (
+        f"out=$( {{ {script}\n}} 2>&1 ); rc=$?\n"
+        f"printf '%s\\n' \"$out\" | tail -c {OUTPUT_TAIL_BYTES}\n"
+        "exit $rc\n"
+    )
+
+
 def command_content(script: str) -> dict[str, Any]:
-    return {"source": {"sourceType": "TEXT", "text": script}, "output": {"outputType": "TEXT"}}
+    return {"source": {"sourceType": "TEXT", "text": wrap_script(script)}, "output": {"outputType": "TEXT"}}
 
 
 def _load_json(path: str) -> dict[str, Any]:

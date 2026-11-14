@@ -45,12 +45,13 @@ class Oci:
             raise AfpError(f"cannot read {name} from bucket {bucket}: {result.stderr.strip()[-300:]}")
         return result.stdout
 
-    def put_object(self, bucket: str, name: str, path: Path, content_type: str) -> None:
+    def put_object(self, bucket: str, name: str, path: Path, content_type: str, quiet: bool = False) -> None:
         self.runner.run(
             self._cmd(
                 "os", "object", "put", *self._ns(), "-bn", bucket, "--name", name,
                 "--file", str(path), "--content-type", content_type, "--force",
-            )
+            ),
+            quiet=quiet,
         )
 
     def secret(self, secret_id: str) -> str:

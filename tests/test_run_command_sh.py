@@ -66,8 +66,8 @@ def env(tmp_path: Path) -> dict[str, str]:
     git = ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.com"]
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
     subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "a"], check=True)
-    subprocess.run([*git, "tag", "-a", "v0.1.0", "-m", "v0.1.0"], check=True)
-    subprocess.run([*git, "tag", "light"], check=True)
+    subprocess.run([*git, "tag", "-a", "test-annotated", "-m", "test"], check=True)
+    subprocess.run([*git, "tag", "test-light"], check=True)
     (config / "terraform.tfvars.json").write_text(json.dumps({
         "tenancy_ocid": "ocid1.tenancy.oc1..xxxx", "region": "us-ashburn-1", "platform_repository": str(repo),
     }))
@@ -99,7 +99,7 @@ def test_send_without_wait_prints_how_to_check(env: dict[str, str], tmp_path: Pa
     assert result.returncode == 0, result.stderr
     assert "make command-result ID=ocid1.instanceagentcommand.oc1..cmd" in result.stdout
     content = json.loads((tmp_path / "content.json").read_text())
-    assert content["source"] == {"sourceType": "TEXT", "text": "echo hi"}
+    assert content["source"]["text"].startswith("out=$( { echo hi\n} 2>&1 )")
     calls = [json.loads(line) for line in (tmp_path / "oci.log").read_text().splitlines()]
     assert not any("command-execution" in c for c in calls)
     [create] = [c for c in calls if "create" in c and "instance-agent" in c]
@@ -128,19 +128,19 @@ def test_timed_out_command_fails(env: dict[str, str], tmp_path: Path) -> None:
 
 
 def test_platform_writes_the_peeled_commit(env: dict[str, str], tmp_path: Path) -> None:
-    result = run("platform.sh", ["v0.1.0"], env)
+    result = run("platform.sh", ["test-annotated"], env)
     assert result.returncode == 0, result.stderr
     put = json.loads((tmp_path / "put.json").read_text())
     # The annotated tag's commit, not the tag object.
-    assert put == {"tag": "v0.1.0", "commit": commit_of(env, "v0.1.0^{commit}")}
+    assert put == {"tag": "test-annotated", "commit": commit_of(env, "test-annotated^{commit}")}
     content = json.loads((tmp_path / "content.json").read_text())
-    assert content["source"]["text"] == "sudo -n /usr/local/sbin/afp-bootstrap"
+    assert "{ sudo -n /usr/local/sbin/afp-bootstrap\n}" in content["source"]["text"]
     assert "SUCCEEDED" in result.stdout
 
 
 def test_platform_takes_a_lightweight_tag(env: dict[str, str], tmp_path: Path) -> None:
-    assert run("platform.sh", ["light"], env).returncode == 0
-    assert json.loads((tmp_path / "put.json").read_text())["commit"] == commit_of(env, "light")
+    assert run("platform.sh", ["test-light"], env).returncode == 0
+    assert json.loads((tmp_path / "put.json").read_text())["commit"] == commit_of(env, "test-light")
 
 
 def test_platform_refuses_unknown_and_bad_tags(env: dict[str, str], tmp_path: Path) -> None:

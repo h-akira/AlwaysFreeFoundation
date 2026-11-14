@@ -325,3 +325,45 @@ def test_main_prints_a_short_summary_last(tmp_path: Path, capsys: pytest.Capture
 def test_bucket_name_matches_terraform() -> None:
     assert 'bucket_name = "afp"' in (ROOT / "terraform" / "main" / "main.tf").read_text()
     assert config.BUCKET == "afp"
+
+
+def test_main_uploads_the_log_with_the_real_runner(tmp_path: Path, capsys: pytest.CaptureFixture[str],
+                                                    monkeypatch: pytest.MonkeyPatch) -> None:
+    """The upload runs after the log is closed; it must not write into it."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "oci").write_text(f'#!/bin/sh\necho "$@" >> "{tmp_path}/oci.log"\n')
+    (bin_dir / "oci").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:/usr/bin:/bin")
+
+    def work(ctx: cli.Context) -> str:
+        ctx.oci = Oci(ctx.runner, "us-ashburn-1", namespace="ns")
+        ctx.runner.run(["oci", "something"])
+        return "done"
+
+    monkeypatch.setitem(cli.COMMANDS, "sync", cli.Command(work, "h", upload_log=True))
+    paths = cli.Paths(code=ROOT, caddy_dir=tmp_path / "caddy", run_dir=tmp_path / "run", log_dir=tmp_path / "log")
+    assert cli.main(["sync"], paths=paths) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("afp sync: OK: done\nlog: bucket afp: logs/")
+    assert "os object put -ns ns -bn afp --name logs/" in (tmp_path / "oci.log").read_text()
+    assert not list((tmp_path / "log").iterdir())  # removed once uploaded
+
+
+def test_main_reports_a_failed_upload(tmp_path: Path, capsys: pytest.CaptureFixture[str],
+                                      monkeypatch: pytest.MonkeyPatch) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "oci").write_text("#!/bin/sh\nexit 1\n")
+    (bin_dir / "oci").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:/usr/bin:/bin")
+
+    def work(ctx: cli.Context) -> str:
+        ctx.oci = Oci(ctx.runner, "us-ashburn-1", namespace="ns")
+        return "done"
+
+    monkeypatch.setitem(cli.COMMANDS, "sync", cli.Command(work, "h", upload_log=True))
+    paths = cli.Paths(code=ROOT, caddy_dir=tmp_path / "caddy", run_dir=tmp_path / "run", log_dir=tmp_path / "log")
+    assert cli.main(["sync"], paths=paths) == 0
+    assert "(upload failed: AfpError)" in capsys.readouterr().out
+    assert list((tmp_path / "log").iterdir())
