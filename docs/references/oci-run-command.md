@@ -2,7 +2,7 @@
 
 VM の中の Oracle Cloud Agent（OCI のイメージに入っているエージェント）の Run Command のプラグインに、コマンドを実行させる仕組み。AWS の SSM の Run Command に当たる。OCI DevOps のインスタンス・グループへのデプロイも、これを使う（[oci-devops.md](oci-devops.md)）。
 
-- **確かめた日**: 2026-11-13（Oracle の公式文書と、CLI から実際に呼んだ結果）
+- **確かめた日**: 2026-11-13・2026-11-14（Oracle の公式文書と、CLI から実際に呼んだ結果）
 
 ## 1. 呼び方
 
@@ -14,6 +14,7 @@ oci instance-agent command-execution get --command-id <命令の OCID> --instanc
 ```
 
 - 結果の `lifecycle-state` は、成功で `SUCCEEDED`、終了コードが 0 でなければ `FAILED`。`content.exit-code` に終了コード、`content.text` に出力が入る（`exit 3` で `FAILED`・exit-code 3 になった。実測）。
+- 出力（`content.text`）は、標準出力と標準エラーの両方が入る（実測）。
 
 ## 2. VM の側
 
@@ -34,12 +35,24 @@ oci instance-agent command-execution get --command-id <命令の OCID> --instanc
 | 同時に動くスクリプト | 既定で 2 つ（`config.yml` の `commandExecutionMaxWorkers`） |
 | 受け取ってまだ消えていないスクリプト | 5 つまで |
 | スクリプトの大きさ（テキストで渡すとき） | 4 KB まで。大きいものは Object Storage に置く |
-| 返る出力（テキストのとき） | 最後の 1 KB だけ。全部が要るなら Object Storage に出す |
+| 返る出力（テキストのとき） | 最後の 1 KB だけ。全部が要るなら Object Storage に出す（実測では最初の側が返った。§5） |
 | 時間切れ | 既定 1 時間・最長 24 時間。時計は、プラグインがコマンドを始めたときから動く |
 | 記録が残る期間 | テキストのものは 7 日。Object Storage に置いたものは消すまで |
 | 取り消し | できる限り試すだけ。終わったもの・期限切れのものは取り消せない |
 
-## 5. 出典
+## 5. 返る出力の切れ方（実測）
+
+- 2026-11-14、1 KB を超えて出力するスクリプトを送ると、`content.text` には **出力の最初の約 1 KB** が入り、最後の側が切れていた（A1・Oracle Linux 9）。§4 の公式文書（最後の 1 KB）と食い違う。
+- 終了コード（`content.exit-code`）は、出力が切れても正しく返った。
+- 結果を出力の最後に書くスクリプトでは、結果が見えなくなる。送るスクリプトを包んで、最後の部分だけを出力させれば、どちらの側で切れても残る:
+  ```sh
+  out=$( { <スクリプト>
+  } 2>&1 ); rc=$?
+  printf '%s\n' "$out" | tail -c 900
+  exit $rc
+  ```
+
+## 6. 出典
 
 - [Running Commands on an Instance](https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/runningcommands.htm)（権限・dynamic group の 30 分・制限）
 - [Oracle Cloud Agent](https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/manage-plugins.htm)

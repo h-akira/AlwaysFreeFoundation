@@ -147,7 +147,7 @@ sequenceDiagram
 ### 5.6 デプロイ
 
 - **各プロジェクトのリポジトリ** にタグ（例: `v1.2.3`）を push すると、そのプロジェクトだけをビルドし、VM でデプロイするところまで自動で行う。デプロイした版の名前は、タグの名前そのもの。
-- **基盤のコードも、タグで版を決めて VM に届ける**。どのタグを使うかを Object Storage に置き、VM の `afp` はそのタグのコードを公開リポジトリから取って入れ替える。
+- **基盤のコードも、タグで版を決めて VM に届ける**。どのタグを使うかを Object Storage に置き、VM はそのタグのコードを公開リポジトリから取って入れ替える。入れ替えるのは、VM の起動のたびと、管理者が Run Command で呼んだときに流れる起動のスクリプト（`afp` の外の固定のスクリプト）で、`afp` 自身は入れ替えない。
 - VM でデプロイを実行するのは、DevOps の **インスタンス・グループへのデプロイ**（AWS の CodeDeploy に当たる）。VM の中の **Oracle Cloud Agent**（OCI のイメージに入っているエージェント）の **Run Command** のプラグインが、`afp deploy <プロジェクト> <版>` を実行する（[references/oci-devops.md](references/oci-devops.md)・[references/oci-run-command.md](references/oci-run-command.md)）。
 - DevOps が使えないときは、手元から同じ Run Command を直接呼んで `afp deploy` を実行させる。
 - デプロイには ssh を使わない。
